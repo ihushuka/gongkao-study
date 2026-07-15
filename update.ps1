@@ -15,7 +15,7 @@ git diff --cached --quiet
 if ($LASTEXITCODE -eq 0) {
   Write-Host "No new source changes to commit. Checking remote sync." -ForegroundColor Yellow
 } else {
-  git commit -m "Add daily news knowledge feed calm soundscapes and OCR import controls"
+  git commit -m "Add full data backup migration and synchronized plan deletion"
   if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
 }
 
