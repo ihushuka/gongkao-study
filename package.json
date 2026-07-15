@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "pdfjs-dist": "^6.1.200",
     "react": "latest",
     "react-dom": "latest",
+    "tesseract.js": "^7.0.0",
     "typescript": "latest",
     "vite": "latest",
     "xlsx": "^0.18.5"
