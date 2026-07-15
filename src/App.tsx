@@ -230,6 +230,8 @@ export default function App() {
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [timerModule, setTimerModule] = useState("资料分析");
   const [timerTitle, setTimerTitle] = useStoredState<string>("shore-timer-title", "今日重点任务");
+  const [navOrder, setNavOrder] = useStoredState<Tab[]>("shore-nav-order", nav.map(item => item.id));
+  const [dragTab, setDragTab] = useState<Tab | null>(null);
   const [timerStartedAt, setTimerStartedAt] = useState<Date | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [toast, setToast] = useState("");
@@ -259,6 +261,12 @@ export default function App() {
   const todayTotal = todayTasks.length + todayRoutines.length;
   const todaySeconds = sessions.filter(s => normalizedDate(s.date) === localISO()).reduce((sum, s) => sum + s.seconds, 0) + activeSeconds;
   const nextTask = todayRoutines.find(r => !r.completedDates.includes(localISO()))?.title || todayTasks.find(t => !t.done)?.title || "";
+  const orderedNav = [...navOrder.map(id => nav.find(item => item.id === id)).filter((item): item is typeof nav[number] => Boolean(item)), ...nav.filter(item => !navOrder.includes(item.id))];
+  const moveNav = (target: Tab) => {
+    if (!dragTab || dragTab === target) return;
+    const current = orderedNav.map(item => item.id), from = current.indexOf(dragTab), to = current.indexOf(target);
+    current.splice(from, 1); current.splice(to, 0, dragTab); setNavOrder(current); setDragTab(null);
+  };
 
   const sharedTimer = { timerOn, activeSeconds, timerModule, setTimerModule, timerTitle, setTimerTitle, toggleTimer, todaySeconds, timerStartedAt };
   let page;
@@ -275,11 +283,11 @@ export default function App() {
   return <main className="app-shell">
     <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
       <div className="brand"><span className="brand-seal">岸</span><div><strong>上岸手账</strong><small>GONGKAO JOURNAL</small></div></div>
-      <nav>{nav.map(item => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => { setTab(item.id); setMobileNav(false); }}><span>{item.mark}</span>{item.label}</button>)}</nav>
+      <nav>{orderedNav.map(item => <button draggable key={item.id} className={`${tab === item.id ? "active" : ""} ${dragTab === item.id ? "dragging" : ""}`} title="按住拖动可调整栏目顺序" onDragStart={() => setDragTab(item.id)} onDragEnd={() => setDragTab(null)} onDragOver={e => e.preventDefault()} onDrop={() => moveNav(item.id)} onClick={() => { setTab(item.id); setMobileNav(false); }}><span>{item.mark}</span><b>{item.label}</b><i className="nav-grip" aria-hidden="true">⋮⋮</i></button>)}</nav>
       <div className="sidebar-foot"><div className="streak"><span>今日任务</span><strong>{todayDone}<small>/{todayTotal}</small></strong></div><p>距离目标，再近一点点。</p></div>
     </aside>
     {mobileNav && <button className="scrim" aria-label="关闭菜单" onClick={() => setMobileNav(false)} />}
-    <section className="content"><header className="topbar"><button className="menu-button" onClick={() => setMobileNav(true)}>☰</button><div><p>{new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}</p><h1>{nav.find(item => item.id === tab)?.label}</h1></div><button className="top-study-status" onClick={() => setTab("study")}><span>{timerOn ? "专注进行中" : "今日学习"}</span><strong>{timerOn ? timerTitle : formatHours(todaySeconds)}</strong><small>{todayDone}/{todayTotal} 项任务完成</small></button></header>{page}</section>
+    <section className="content"><header className="topbar"><button className="menu-button" onClick={() => setMobileNav(true)}>☰</button><div><p>{new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}</p><h1>{orderedNav.find(item => item.id === tab)?.label}</h1></div><button className="top-study-status" onClick={() => setTab("study")}><span>{timerOn ? "专注进行中" : "今日学习"}</span><strong>{timerOn ? timerTitle : formatHours(todaySeconds)}</strong><small>{todayDone}/{todayTotal} 项任务完成</small></button></header>{page}</section>
     {toast && <div className="toast">✓ {toast}</div>}
     <StudySupervisor nextTask={nextTask} timer={sharedTimer} done={todayDone} total={todayTotal} onOpen={() => setTab(nextTask ? "daily" : "study")} />
   </main>;
