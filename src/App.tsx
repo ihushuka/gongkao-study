@@ -1,4 +1,5 @@
 import { ChangeEvent, Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 
 type Tab = "home" | "plan" | "study" | "practice" | "idiom" | "mistakes" | "review" | "settings";
 type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string };
@@ -34,6 +35,72 @@ const formatShortDate = (value: string) => normalizedDate(value).slice(5).replac
 const formatClock = (seconds: number) => `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
 const formatHours = (seconds: number) => `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 const daysUntil = (value: string) => value ? Math.max(0, Math.ceil((new Date(`${value}T23:59:59`).getTime() - Date.now()) / 86400000)) : null;
+const inferSubject = (title: string) => {
+  if (/资料|速算/.test(title)) return "资料分析";
+  if (/言语|成语|人民日报/.test(title)) return "言语理解";
+  if (/判断|图推|逻辑/.test(title)) return "判断推理";
+  if (/数量|数学/.test(title)) return "数量关系";
+  if (/常识/.test(title)) return "常识判断";
+  if (/错题|复盘|模考/.test(title)) return "错题复盘";
+  return "其他计划";
+};
+const inferMinutes = (title: string) => Number(title.match(/(\d+)\s*(?:min|分钟)/i)?.[1] || 45);
+const excelDate = (value: unknown) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return localISO(value);
+  if (typeof value === "number" && value > 25000 && value < 80000) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) return `${parsed.y}-${pad(parsed.m)}-${pad(parsed.d)}`;
+  }
+  if (typeof value === "string") {
+    const clean = value.trim();
+    const direct = clean.match(/^(20\d{2})[./-](\d{1,2})[./-](\d{1,2})$/);
+    if (direct) return `${direct[1]}-${pad(Number(direct[2]))}-${pad(Number(direct[3]))}`;
+  }
+  return "";
+};
+const cleanPlanText = (value: unknown) => typeof value === "string" ? value.trim().replace(/^[□☑✓√]+\s*/, "") : "";
+
+function recognizePlanWorkbook(buffer: ArrayBuffer) {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  let best: { tasks: Omit<Task, "id" | "done">[]; sheet: string; dated: number; recurring: number } = { tasks: [], sheet: "", dated: 0, recurring: 0 };
+  workbook.SheetNames.forEach(sheetName => {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, raw: true, defval: null });
+    const dateRows = rows.map((row, rowIndex) => ({ rowIndex, dates: row.map((cell, col) => ({ col, date: excelDate(cell) })).filter(x => x.date) })).filter(x => x.dates.length >= 2);
+    const datedTasks: Omit<Task, "id" | "done">[] = [];
+    dateRows.forEach(entry => {
+      entry.dates.forEach(({ col, date }) => {
+        const nextMatchingRow = dateRows.find(next => next.rowIndex > entry.rowIndex && next.dates.some(candidate => Math.abs(candidate.col - col) <= 1));
+        const stop = nextMatchingRow?.rowIndex ?? Math.min(rows.length, entry.rowIndex + 7);
+        for (let r = entry.rowIndex + 1; r < stop; r += 1) {
+          const candidates = [cleanPlanText(rows[r]?.[col]), cleanPlanText(rows[r]?.[col + 1])].filter(Boolean);
+          const title = candidates.find(x => !/^(每日计划|星期[一二三四五六日天]|周[一二三四五六日天])$/.test(x) && !/^\d+$/.test(x));
+          if (title) datedTasks.push({ title, subject: inferSubject(title), minutes: inferMinutes(title), date });
+        }
+      });
+    });
+    const planHeader = rows.findIndex(row => row.some(cell => cleanPlanText(cell) === "每日计划"));
+    const recurringTitles = planHeader < 0 ? [] : rows.slice(planHeader + 1, planHeader + 9).flatMap(row => row.map(cleanPlanText)).filter(x => x && !/^(每日计划|星期|周[一二三四五六日天]|\d+)$/.test(x));
+    const dates = dateRows.flatMap(x => x.dates.map(d => d.date));
+    const monthCounts = dates.reduce<Record<string, number>>((acc, d) => { const m = d.slice(0, 7); acc[m] = (acc[m] || 0) + 1; return acc; }, {});
+    const targetMonth = Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const recurringTasks: Omit<Task, "id" | "done">[] = [];
+    if (targetMonth) {
+      const [year, month] = targetMonth.split("-").map(Number);
+      const count = new Date(year, month, 0).getDate();
+      Array.from(new Set(recurringTitles)).forEach(title => {
+        for (let day = 1; day <= count; day += 1) {
+          const date = `${targetMonth}-${pad(day)}`;
+          const weekday = new Date(`${date}T12:00:00`).getDay();
+          if (/除周日|周日除外/.test(title) && weekday === 0) continue;
+          recurringTasks.push({ title, subject: inferSubject(title), minutes: inferMinutes(title), date });
+        }
+      });
+    }
+    const unique = Array.from(new Map([...datedTasks, ...recurringTasks].map(t => [`${t.date}|${t.title}`, t])).values());
+    if (unique.length > best.tasks.length) best = { tasks: unique, sheet: sheetName, dated: datedTasks.length, recurring: recurringTasks.length };
+  });
+  return best;
+}
 
 const seedTasks: Task[] = [
   { id: 1, title: "资料分析｜超大杯第 12 组", subject: "资料分析", minutes: 50, done: true, date: localISO() },
@@ -160,6 +227,8 @@ function Empty({ text }: { text: string }) { return <div className="empty"><span
 function Plan({ tasks, setTasks, flash }: { tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; flash: (x: string) => void }) {
   const [month, setMonth] = useState(localISO().slice(0, 7));
   const [date, setDate] = useState(localISO()), [title, setTitle] = useState(""), [subject, setSubject] = useState("资料分析"), [minutes, setMinutes] = useState(45);
+  const [importing, setImporting] = useState(false), [importNote, setImportNote] = useState("");
+  const planFileRef = useRef<HTMLInputElement>(null);
   const monthTasks = tasks.filter(t => normalizedDate(t.date).startsWith(month));
   const finished = monthTasks.filter(t => t.done).length;
   const percent = monthTasks.length ? Math.round(finished / monthTasks.length * 100) : 0;
@@ -168,8 +237,31 @@ function Plan({ tasks, setTasks, flash }: { tasks: Task[]; setTasks: Dispatch<Se
   const leading = (new Date(year, monthNumber - 1, 1).getDay() + 6) % 7;
   const cells = [...Array(leading).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
   const add = (e: FormEvent) => { e.preventDefault(); if (!title.trim()) return; setTasks([...tasks, { id: Date.now(), title: title.trim(), subject, minutes, date, done: false }]); setTitle(""); setMonth(date.slice(0, 7)); flash("任务已加入对应日期"); };
+  const importPlan = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setImporting(true); setImportNote("正在识别日期与任务…");
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const result = recognizePlanWorkbook(reader.result as ArrayBuffer);
+        const existing = new Set(tasks.map(t => `${normalizedDate(t.date)}|${t.title}`));
+        const fresh = result.tasks.filter(t => !existing.has(`${t.date}|${t.title}`)).map((t, i) => ({ ...t, id: Date.now() + i, done: false }));
+        if (!fresh.length) { setImportNote("没有发现新的任务，可能已经导入过了"); flash("未发现可新增的计划任务"); }
+        else {
+          setTasks([...tasks, ...fresh]);
+          const firstMonth = fresh[0].date?.slice(0, 7); if (firstMonth) setMonth(firstMonth);
+          setImportNote(`已从“${result.sheet}”识别 ${fresh.length} 项：日期任务 ${result.dated} 项，并自动展开每日计划`);
+          flash(`成功导入 ${fresh.length} 项月计划`);
+        }
+      } catch { setImportNote("识别失败，请确认文件为 .xlsx 或 .xls 格式"); flash("表格识别失败"); }
+      setImporting(false); e.target.value = "";
+    };
+    reader.onerror = () => { setImporting(false); setImportNote("文件读取失败，请重新选择"); };
+    reader.readAsArrayBuffer(file);
+  };
   return <div className="page-stack">
-    <section className="page-intro"><div><p className="eyebrow">MONTHLY PLAN</p><h2>把月目标拆到每一天</h2><p>每个日期都可以添加、查看和勾选任务。</p></div><input className="month-picker" type="month" value={month} onChange={e => setMonth(e.target.value)} /></section>
+    <section className="page-intro"><div><p className="eyebrow">MONTHLY PLAN</p><h2>把月目标拆到每一天</h2><p>每个日期都可以添加、查看和勾选任务。</p></div><div className="intro-actions"><input hidden ref={planFileRef} type="file" accept=".xlsx,.xls" onChange={importPlan} /><button className="import-plan-button" onClick={() => planFileRef.current?.click()} disabled={importing}><span>表</span><div><strong>{importing ? "正在识别…" : "一键导入计划表"}</strong><small>自动识别日期与每日任务</small></div></button><input className="month-picker" type="month" value={month} onChange={e => setMonth(e.target.value)} /></div></section>
+    {importNote && <section className="import-result"><span>✓</span><p>{importNote}</p><button onClick={() => setImportNote("")}>关闭</button></section>}
     <section className="metric-grid compact"><Metric label="本月任务总量" value={monthTasks.length} note={`${month.replace("-", "年")}月`} color="sage" /><Metric label="本月已完成" value={finished} note={`剩余 ${monthTasks.length - finished} 项`} color="peach" /><Metric label="完成百分比" value={`${percent}%`} note="按任务数量计算" color="lilac" /><Metric label="计划总时长" value={`${Math.round(monthTasks.reduce((s, t) => s + t.minutes, 0) / 60 * 10) / 10}h`} note="预计投入" color="rose" /></section>
     <section className="month-layout"><div className="panel calendar-panel"><div className="calendar-week">{["一", "二", "三", "四", "五", "六", "日"].map(x => <span key={x}>周{x}</span>)}</div><div className="calendar-grid">{cells.map((day, i) => day === null ? <div className="calendar-cell blank" key={`b${i}`} /> : (() => { const key = `${month}-${pad(day)}`; const dayTasks = tasks.filter(t => normalizedDate(t.date) === key); return <div className={`calendar-cell ${key === localISO() ? "today" : ""}`} key={key}><button className="day-number" onClick={() => setDate(key)}>{day}</button><div className="day-tasks">{dayTasks.map(task => <label className={task.done ? "done" : ""} key={task.id}><input type="checkbox" checked={task.done} onChange={() => setTasks(tasks.map(x => x.id === task.id ? { ...x, done: !x.done } : x))} /><i /> <span>{task.title}</span></label>)}</div></div>; })())}</div></div>
       <form className="panel form-card sticky-form" onSubmit={add}><PanelTitle title="添加任务" /><label>任务日期<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label>任务内容<input value={title} onChange={e => setTitle(e.target.value)} placeholder="例如：完成资料分析第12组" /></label><div className="form-grid"><label>学习模块<select value={subject} onChange={e => setSubject(e.target.value)}>{[...modules, "错题复盘", "成语积累"].map(x => <option key={x}>{x}</option>)}</select></label><label>预计时长（分钟）<input type="number" min="5" step="5" value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label></div><button className="primary-button wide">添加到月计划</button></form></section>
@@ -178,15 +270,28 @@ function Plan({ tasks, setTasks, flash }: { tasks: Task[]; setTasks: Dispatch<Se
 
 function StudyTime({ sessions, setSessions, flash, timer }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; flash: (x: string) => void; timer: TimerShared }) {
   const [date, setDate] = useState(localISO()), [module, setModule] = useState("资料分析"), [minutes, setMinutes] = useState(60);
+  const [heatMonth, setHeatMonth] = useState(localISO().slice(0, 7));
   const days = Array.from({ length: 7 }, (_, i) => addDays(i - 6));
   const daily = days.map(day => ({ day, seconds: sessions.filter(s => normalizedDate(s.date) === day).reduce((sum, s) => sum + s.seconds, 0) + (day === localISO() ? timer.activeSeconds : 0) }));
   const moduleStats = modules.map(m => ({ module: m, seconds: sessions.filter(s => s.module === m).reduce((sum, s) => sum + s.seconds, 0) + (timer.timerOn && timer.timerModule === m ? timer.activeSeconds : 0) }));
   const maxDay = Math.max(...daily.map(x => x.seconds), 1), maxModule = Math.max(...moduleStats.map(x => x.seconds), 1);
+  const [heatYear, heatMonthNumber] = heatMonth.split("-").map(Number);
+  const heatDays = new Date(heatYear, heatMonthNumber, 0).getDate();
+  const heatLeading = (new Date(heatYear, heatMonthNumber - 1, 1).getDay() + 6) % 7;
+  const heatCells = [...Array(heatLeading).fill(null), ...Array.from({ length: heatDays }, (_, i) => i + 1)];
+  const heatData = Array.from({ length: heatDays }, (_, i) => {
+    const day = `${heatMonth}-${pad(i + 1)}`;
+    const seconds = sessions.filter(s => normalizedDate(s.date) === day).reduce((sum, s) => sum + s.seconds, 0) + (day === localISO() ? timer.activeSeconds : 0);
+    const level = seconds === 0 ? 0 : seconds < 1800 ? 1 : seconds < 3600 ? 2 : seconds < 7200 ? 3 : seconds < 14400 ? 4 : 5;
+    return { day, seconds, level };
+  });
+  const heatTotal = heatData.reduce((sum, x) => sum + x.seconds, 0), studiedDays = heatData.filter(x => x.seconds > 0).length;
   const addManual = (e: FormEvent) => { e.preventDefault(); if (minutes <= 0) return; setSessions([...sessions, { id: Date.now(), date, module, seconds: minutes * 60 }]); flash("学习时长已补录"); };
   return <div className="page-stack"><section className="page-intro"><div><p className="eyebrow">STUDY TIMER</p><h2>记录真正投入的时间</h2><p>实时计时与线下学习补录会统一进入统计。</p></div><div className="study-today"><strong>{formatHours(timer.todaySeconds)}</strong><span>今日累计</span></div></section>
     <section className="study-grid"><div className="panel focus-card"><PanelTitle title="当前专注" /><div className={`focus-clock ${timer.timerOn ? "running" : ""}`}><span>{timer.timerOn ? "正在学习" : "准备开始"}</span><strong>{formatClock(timer.activeSeconds)}</strong></div><select value={timer.timerModule} onChange={e => timer.setTimerModule(e.target.value)}>{modules.map(m => <option key={m}>{m}</option>)}</select><button className="primary-button wide" onClick={timer.toggleTimer}>{timer.timerOn ? "结束并计入统计" : "开始计时"}</button></div>
       <div className="panel"><PanelTitle title="近7天学习时长" /><div className="study-bars">{daily.map(x => <div key={x.day}><span>{formatHours(x.seconds)}</span><i style={{ height: `${Math.max(4, x.seconds / maxDay * 125)}px` }} /><small>{formatShortDate(x.day)}</small></div>)}</div></div>
       <div className="panel"><PanelTitle title="模块投入分布" /><div className="horizontal-bars">{moduleStats.map(x => <div key={x.module}><span>{x.module}</span><div><i style={{ width: `${x.seconds / maxModule * 100}%` }} /></div><strong>{Math.round(x.seconds / 360) / 10}h</strong></div>)}</div></div></section>
+    <section className="panel study-heatmap-panel"><div className="heatmap-head"><div><p className="eyebrow">MONTHLY FOCUS</p><h2>月历学习时长</h2><span>颜色越深，代表当天投入时间越长。</span></div><input className="month-picker" type="month" value={heatMonth} onChange={e => setHeatMonth(e.target.value)} /></div><div className="heatmap-summary"><div><strong>{formatHours(heatTotal)}</strong><span>本月累计</span></div><div><strong>{studiedDays}</strong><span>学习天数</span></div><div><strong>{studiedDays ? formatHours(Math.round(heatTotal / studiedDays)) : "0h 0m"}</strong><span>日均时长</span></div></div><div className="heatmap-week">{["一", "二", "三", "四", "五", "六", "日"].map(x => <span key={x}>周{x}</span>)}</div><div className="study-heatmap">{heatCells.map((day, i) => day === null ? <div className="heat-day blank" key={`hb${i}`} /> : (() => { const item = heatData[day - 1]; return <button className={`heat-day level-${item.level} ${item.day === localISO() ? "today" : ""}`} key={item.day} onClick={() => { setDate(item.day); if (item.seconds) flash(`${formatShortDate(item.day)} 学习 ${formatHours(item.seconds)}`); }} title={`${item.day} · ${formatHours(item.seconds)}`}><span>{day}</span><strong>{item.seconds ? formatHours(item.seconds) : "—"}</strong></button>; })())}</div><div className="heat-legend"><span>少</span>{[0, 1, 2, 3, 4, 5].map(x => <i className={`level-${x}`} key={x} />)}<span>多</span><small>0 · &lt;30m · &lt;1h · &lt;2h · &lt;4h · ≥4h</small></div></section>
     <section className="two-col"><form className="panel form-card" onSubmit={addManual}><PanelTitle title="补录学习时长" /><div className="form-grid"><label>学习日期<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label>学习模块<select value={module} onChange={e => setModule(e.target.value)}>{modules.map(m => <option key={m}>{m}</option>)}</select></label><label>学习分钟数<input type="number" min="1" value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label></div><button className="primary-button">保存时长</button></form>
       <div className="panel"><PanelTitle title="最近记录" /><div className="session-list">{sessions.slice().reverse().slice(0, 8).map(s => <div key={s.id}><span>{formatShortDate(s.date)}</span><strong>{s.module}</strong><em>{formatHours(s.seconds)}</em><button onClick={() => setSessions(sessions.filter(x => x.id !== s.id))}>删除</button></div>)}</div></div></section>
   </div>;
