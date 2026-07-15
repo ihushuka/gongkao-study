@@ -15,7 +15,7 @@ git diff --cached --quiet
 if ($LASTEXITCODE -eq 0) {
   Write-Host "No new source changes to commit. Checking remote sync." -ForegroundColor Yellow
 } else {
-  git commit -m "Add full data backup migration and synchronized plan deletion"
+  git commit -m "Add weekly monthly reports and active anti-delay supervision"
   if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
 }
 
