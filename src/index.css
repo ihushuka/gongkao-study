@@ -134,3 +134,118 @@ input[type="date"],input[type="month"],input[type="time"]{color-scheme:light;acc
 .timeline-side article.micro strong{font-size:8px;line-height:1;white-space:nowrap}
 .timeline-check{width:18px;height:18px;flex:0 0 18px}
 @media(max-width:760px){.official-links{align-items:flex-start;flex-direction:column}.timeline-side article{padding:4px 6px}.timeline-side article strong{font-size:10px}}
+
+/* v17: theme-synchronized study blocks, backup badge and compact one-line timeline content */
+.planned-side article{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 24%,var(--panel)),color-mix(in srgb,var(--primary) 10%,var(--panel)));
+  border-left-color:var(--primary);
+  color:var(--ink);
+}
+.actual-side article{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 28%,var(--panel)),color-mix(in srgb,var(--accent) 12%,var(--panel)));
+  border-right-color:var(--accent);
+  color:var(--ink);
+}
+.actual-side article.running{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 38%,var(--panel)),color-mix(in srgb,var(--primary) 12%,var(--panel)));
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 26%,transparent),0 7px 18px color-mix(in srgb,var(--accent) 18%,transparent);
+}
+.timeline-side article{
+  container-type:size;
+  padding:clamp(1px,1.2cqh,6px) 8px;
+}
+.timeline-side article .timeline-inline{
+  min-width:0;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  overflow:hidden;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.timeline-time{
+  flex:0 0 auto;
+  font:700 9px/1 Georgia,"Noto Sans SC",sans-serif;
+  color:var(--primary-deep);
+  letter-spacing:-.02em;
+}
+.actual-side .timeline-time{color:color-mix(in srgb,var(--accent) 76%,var(--ink))}
+.timeline-side article .timeline-inline strong{
+  flex:1 1 auto;
+  min-width:0;
+  margin:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10px;
+  line-height:1;
+}
+.timeline-side article .timeline-inline small{
+  flex:0 1 auto;
+  min-width:0;
+  max-width:36%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:8px;
+  line-height:1;
+  color:var(--muted);
+}
+.timeline-side article.compact .timeline-inline{gap:4px}
+.timeline-side article.compact .timeline-time{font-size:8px}
+.timeline-side article.compact .timeline-inline strong{font-size:9px}
+.timeline-side article.compact .timeline-inline small{display:none}
+.timeline-side article.micro .timeline-inline{gap:3px}
+.timeline-side article.micro .timeline-time{display:block;font-size:7px}
+.timeline-side article.micro .timeline-inline strong{display:block;font-size:8px;line-height:1}
+.timeline-side article.micro .timeline-inline small{display:none}
+.timeline-side article.micro .timeline-check{display:none}
+.timeline-check{
+  border-color:color-mix(in srgb,var(--primary) 68%,var(--ink));
+  background:color-mix(in srgb,var(--panel) 88%,transparent);
+  color:var(--primary);
+}
+
+/* Dashboard daily list and monthly recurring tasks follow the selected theme. */
+.task-list{gap:7px}
+.task-row{
+  border:1px solid color-mix(in srgb,var(--primary) 12%,var(--line));
+  border-radius:13px;
+  padding:11px 12px;
+  background:linear-gradient(100deg,color-mix(in srgb,var(--primary) 8%,var(--panel)),color-mix(in srgb,var(--panel) 96%,transparent));
+  transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+.task-row:last-child{border:1px solid color-mix(in srgb,var(--primary) 12%,var(--line))}
+.task-row:hover{transform:translateY(-1px);background:color-mix(in srgb,var(--primary) 13%,var(--panel));border-color:color-mix(in srgb,var(--primary) 25%,var(--line))}
+.task-row.done{background:color-mix(in srgb,var(--primary) 16%,var(--panel));opacity:.75}
+.routine-grid article{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 18%,var(--panel)),color-mix(in srgb,var(--primary) 7%,var(--panel)));
+  border-color:color-mix(in srgb,var(--primary) 22%,var(--line));
+}
+.routine-grid article>div:first-child{color:color-mix(in srgb,var(--primary) 78%,var(--ink))}
+.routine-check-button{background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--primary-deep);border-color:color-mix(in srgb,var(--primary) 22%,var(--line))!important}
+.routine-check-button.checked{background:var(--primary)!important;color:#fff!important}
+
+/* Backup age badge follows the active primary/accent colors instead of fixed sage/peach. */
+.backup-center{background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 13%,var(--panel)),var(--panel))}
+.backup-age{
+  background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 30%,var(--panel)),color-mix(in srgb,var(--primary) 13%,var(--panel)));
+  border:1px solid color-mix(in srgb,var(--primary) 24%,var(--line));
+  color:var(--ink);
+  box-shadow:0 8px 20px color-mix(in srgb,var(--primary) 10%,transparent);
+}
+.backup-age.warning{
+  background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 34%,var(--panel)),color-mix(in srgb,var(--accent) 14%,var(--panel)));
+  border-color:color-mix(in srgb,var(--accent) 35%,var(--line));
+  color:var(--ink);
+}
+.backup-age span{color:color-mix(in srgb,var(--ink) 68%,transparent)}
+
+@media(max-width:760px){
+  .timeline-side article .timeline-inline{gap:4px}
+  .timeline-time{font-size:8px}
+  .timeline-side article .timeline-inline strong{font-size:9px}
+  .timeline-side article .timeline-inline small{display:none}
+}
