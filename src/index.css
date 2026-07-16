@@ -249,3 +249,57 @@ input[type="date"],input[type="month"],input[type="time"]{color-scheme:light;acc
   .timeline-side article .timeline-inline strong{font-size:9px}
   .timeline-side article .timeline-inline small{display:none}
 }
+
+/* v18: force timeline time/title/details onto one horizontal row */
+.timeline-side article .timeline-inline{
+  display:grid!important;
+  grid-template-columns:max-content minmax(0,1fr) max-content;
+  grid-template-rows:1fr;
+  align-items:center;
+  column-gap:6px;
+  width:100%;
+  height:100%;
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  flex-direction:row!important;
+}
+.timeline-side article .timeline-inline>.timeline-time,
+.timeline-side article .timeline-inline>strong,
+.timeline-side article .timeline-inline>small{
+  display:block;
+  min-width:0;
+  margin:0;
+  align-self:center;
+  line-height:1!important;
+  white-space:nowrap;
+}
+.timeline-side article .timeline-inline>.timeline-time{
+  grid-column:1;
+  overflow:visible;
+  text-overflow:clip;
+}
+.timeline-side article .timeline-inline>strong{
+  grid-column:2;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.timeline-side article .timeline-inline>small{
+  grid-column:3;
+  max-width:92px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.timeline-side article.compact .timeline-inline,
+.timeline-side article.micro .timeline-inline{
+  grid-template-columns:max-content minmax(0,1fr);
+  column-gap:4px;
+}
+.timeline-side article.compact .timeline-inline>small,
+.timeline-side article.micro .timeline-inline>small{display:none!important}
+.timeline-side article.micro .timeline-inline>.timeline-time,
+.timeline-side article.micro .timeline-inline>strong{display:block!important}
+@media(max-width:760px){
+  .timeline-side article .timeline-inline{grid-template-columns:max-content minmax(0,1fr);column-gap:4px}
+  .timeline-side article .timeline-inline>small{display:none!important}
+}
