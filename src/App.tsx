@@ -55,6 +55,58 @@ const inferSubject = (title: string) => {
   return "其他计划";
 };
 const inferMinutes = (title: string) => Number(title.match(/(\d+)\s*(?:min|分钟)/i)?.[1] || 45);
+const isDirectNewsArticle = (item: NewsItem, source: "xuexi" | "people" | "gov") => {
+  const title = item.title.trim();
+  if (!title || /^(首页|更多|要闻|新闻|时政|国内|国际|中国政府网|人民日报|人民网|学习强国)(频道|栏目|首页)?$/.test(title)) return false;
+  try {
+    const url = new URL(item.link);
+    if (!/^https?:$/.test(url.protocol)) return false;
+    const path = url.pathname.replace(/\/{2,}/g, "/").toLowerCase();
+    const normalized = path.replace(/\/(index\.(?:s?html?|htm))?$/, "/");
+    const generic = new Set(["/", "/yaowen/", "/yaowen/liebiao/", "/politics/", "/news/", "/index.html", "/index.htm"]);
+    if (generic.has(path) || generic.has(normalized)) return false;
+    if (source === "gov") return /content_\d+\.(?:s?html?|htm)$/.test(path) || /\/20\d{4}\/\d{1,2}\/\d{1,2}\//.test(path) || (/\.(?:s?html?|htm)$/.test(path) && path.split("/").filter(Boolean).length >= 3);
+    if (source === "people") return /\/n1\/20\d{2}\/\d{4}\//.test(path) || /content_\d+\.(?:s?html?|htm)$/.test(path) || (/\.(?:s?html?|htm)$/.test(path) && path.split("/").filter(Boolean).length >= 3);
+    return url.searchParams.has("id") || /detail|article|static_page|lgpage/.test(path) || path.split("/").filter(Boolean).length >= 3;
+  } catch { return false; }
+};
+
+type TimelineLayoutEntry<T> = { item: T; lane: number; laneCount: number };
+function layoutTimelineEntries<T>(items: T[], getStart: (item: T) => string | undefined, getEnd: (item: T) => string | undefined): TimelineLayoutEntry<T>[] {
+  const normalized = items.map(item => {
+    const start = timeMinutes(getStart(item));
+    const rawEnd = timeMinutes(getEnd(item));
+    if (start === null) return null;
+    // A short card still needs enough visual height for two text lines. Treat that
+    // visual footprint as occupied time so adjacent cards never paint over it.
+    const end = Math.max(rawEnd ?? start + 45, start + 48);
+    return { item, start, end };
+  }).filter((entry): entry is { item: T; start: number; end: number } => Boolean(entry)).sort((a, b) => a.start - b.start || a.end - b.end);
+  const result: TimelineLayoutEntry<T>[] = [];
+  let cluster: typeof normalized = [];
+  let clusterEnd = -Infinity;
+  const flush = () => {
+    if (!cluster.length) return;
+    const laneEnds: number[] = [];
+    const placed = cluster.map(entry => {
+      let lane = laneEnds.findIndex(end => end <= entry.start);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = entry.end;
+      return { item: entry.item, lane };
+    });
+    const laneCount = Math.max(1, laneEnds.length);
+    placed.forEach(entry => result.push({ ...entry, laneCount }));
+    cluster = [];
+    clusterEnd = -Infinity;
+  };
+  normalized.forEach(entry => {
+    if (cluster.length && entry.start >= clusterEnd) flush();
+    cluster.push(entry);
+    clusterEnd = Math.max(clusterEnd, entry.end);
+  });
+  flush();
+  return result;
+}
 const excelDate = (value: unknown) => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return localISO(value);
   if (typeof value === "number" && value > 25000 && value < 80000) {
@@ -381,7 +433,7 @@ function Dashboard({ tasks, setTasks, routines, setRoutines, practices, mistakes
 
 function DailyBriefing() {
   type SourceKey = "xuexi" | "people" | "gov";
-  const sourceMeta: Record<SourceKey, { label: string; url: string }> = { xuexi: { label: "学习强国", url: "https://www.xuexi.cn/" }, people: { label: "人民日报", url: "https://www.people.com.cn/" }, gov: { label: "中国政府网", url: "https://www.gov.cn/" } };
+  const sourceMeta: Record<SourceKey, { label: string }> = { xuexi: { label: "学习强国" }, people: { label: "人民日报" }, gov: { label: "中国政府网" } };
   const [source, setSource] = useState<SourceKey>("people"), [allNews, setAllNews] = useState<Record<SourceKey, NewsItem[]>>({ xuexi: [], people: [], gov: [] }), [updatedAt, setUpdatedAt] = useState(""), [feedDate, setFeedDate] = useState(""), [loading, setLoading] = useState(true), [showAnswer, setShowAnswer] = useState<number | null>(null), [refreshKey, setRefreshKey] = useState(0);
   const knowledgeIndex = Math.floor(new Date(`${localISO()}T12:00:00`).getTime() / 86400000);
   const facts = [dailyKnowledge[knowledgeIndex % dailyKnowledge.length], dailyKnowledge[(knowledgeIndex * 3 + 2) % dailyKnowledge.length], dailyKnowledge[(knowledgeIndex * 5 + 4) % dailyKnowledge.length]];
@@ -389,8 +441,9 @@ function DailyBriefing() {
     setLoading(true);
     fetch(`${new URL("./daily-news.json", window.location.href)}?t=${Date.now()}`).then(response => response.ok ? response.json() : Promise.reject()).then(data => { setFeedDate(data.date || ""); setUpdatedAt(data.updatedAt || ""); setAllNews({ xuexi: data.sources?.xuexi || [], people: data.sources?.people || [], gov: data.sources?.gov || [] }); }).catch(() => { setFeedDate(""); setAllNews({ xuexi: [], people: [], gov: [] }); }).finally(() => setLoading(false));
   }, [refreshKey]);
-  const news = feedDate === localISO() ? allNews[source].filter(item => !item.date || item.date === localISO()) : [], current = sourceMeta[source];
-  return <section className="daily-briefing"><div className="panel news-panel"><div className="briefing-head"><div><p className="eyebrow">DAILY NEWS</p><h2>今日要闻</h2><span>仅展示 {localISO()} 当天发布内容 · {updatedAt ? `最近更新 ${new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : "等待更新"}</span></div><button onClick={() => setRefreshKey(x => x + 1)}>刷新</button></div><div className="news-source-tabs">{(Object.keys(sourceMeta) as SourceKey[]).map(key => <button className={source === key ? "active" : ""} key={key} onClick={() => setSource(key)}>{sourceMeta[key].label}<small>{feedDate === localISO() ? allNews[key].filter(x => !x.date || x.date === localISO()).length : 0}</small></button>)}</div>{loading ? <div className="briefing-loading">正在获取今天最新要闻…</div> : news.length ? <div className="news-list">{news.map((item, index) => <a href={item.link} target="_blank" rel="noreferrer" key={`${item.link}-${index}`}><i>{pad(index + 1)}</i><span><strong>{item.title}</strong><small>{item.source} · {item.date || localISO()}</small></span><b>↗</b></a>)}</div> : <div className="news-fallback"><strong>{feedDate !== localISO() ? "今天的数据尚未完成更新" : `${current.label}今天暂未检索到新内容`}</strong><p>系统不会用昨日新闻填充。可点击官方入口直接查看最新页面。</p></div>}<div className="official-links"><a href={current.url} target="_blank" rel="noreferrer">打开{current.label}官方页面 ↗</a><span>后台每小时检查更新</span></div></div><div className="panel knowledge-card"><p className="eyebrow">DAILY KNOWLEDGE</p>{facts.map((fact, index) => <article className="knowledge-item" key={index}><span className="knowledge-tag">{fact.category}常识 · 第{index + 1}题</span><h2>{fact.question}</h2><div className={`knowledge-answer ${showAnswer === index ? "show" : ""}`}>{showAnswer === index ? fact.answer : "先在心里作答，再查看答案"}</div><button className={showAnswer === index ? "soft-button" : "primary-button"} onClick={() => setShowAnswer(showAnswer === index ? null : index)}>{showAnswer === index ? "收起答案" : "查看答案"}</button></article>)}<small>每天自动更换三道，覆盖不同类型常识。</small></div></section>;
+  const visibleNews = (key: SourceKey) => allNews[key].filter(item => (!item.date || item.date === localISO()) && isDirectNewsArticle(item, key));
+  const news = feedDate === localISO() ? visibleNews(source) : [], current = sourceMeta[source];
+  return <section className="daily-briefing"><div className="panel news-panel"><div className="briefing-head"><div><p className="eyebrow">DAILY NEWS</p><h2>今日要闻</h2><span>仅展示 {localISO()} 当天发布内容 · {updatedAt ? `最近更新 ${new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : "等待更新"}</span></div><button onClick={() => setRefreshKey(x => x + 1)}>刷新</button></div><div className="news-source-tabs">{(Object.keys(sourceMeta) as SourceKey[]).map(key => <button className={source === key ? "active" : ""} key={key} onClick={() => setSource(key)}>{sourceMeta[key].label}<small>{feedDate === localISO() ? visibleNews(key).length : 0}</small></button>)}</div>{loading ? <div className="briefing-loading">正在获取今天最新要闻…</div> : news.length ? <div className="news-list">{news.map((item, index) => <a href={item.link} target="_blank" rel="noreferrer" key={`${item.link}-${index}`}><i>{pad(index + 1)}</i><span><strong>{item.title}</strong><small>{item.source} · {item.date || localISO()}</small></span><b>↗</b></a>)}</div> : <div className="news-fallback"><strong>{feedDate !== localISO() ? "今天的数据尚未完成更新" : `${current.label}今天暂未检索到可直接打开的文章`}</strong><p>系统已过滤官网首页、栏目页和“更多”入口，不再用这些页面冒充新闻文章。</p></div>}<div className="news-status"><span>仅保留可直接打开的文章链接</span><span>后台每小时检查更新</span></div></div><div className="panel knowledge-card"><p className="eyebrow">DAILY KNOWLEDGE</p>{facts.map((fact, index) => <article className="knowledge-item" key={index}><span className="knowledge-tag">{fact.category}常识 · 第{index + 1}题</span><h2>{fact.question}</h2><div className={`knowledge-answer ${showAnswer === index ? "show" : ""}`}>{showAnswer === index ? fact.answer : "先在心里作答，再查看答案"}</div><button className={showAnswer === index ? "soft-button" : "primary-button"} onClick={() => setShowAnswer(showAnswer === index ? null : index)}>{showAnswer === index ? "收起答案" : "查看答案"}</button></article>)}<small>每天自动更换三道，覆盖不同类型常识。</small></div></section>;
 }
 
 function Metric({ label, value, note, color }: { label: string; value: string | number; note: string; color: string }) { return <article className={`metric-card ${color}`}><p>{label}</p><strong>{value}</strong><small>{note}</small></article>; }
@@ -432,6 +485,9 @@ function DailyPlan({ tasks, setTasks, routines, setRoutines, sessions, timer }: 
   const planned = [...dateRoutines.map(r => ({ kind: "routine" as const, id: r.id, title: r.title, subject: r.subject, start: r.plannedStart, end: r.plannedEnd, done: r.completedDates.includes(date), state: r.supervision?.[date] })), ...dateTasks.map(t => ({ kind: "task" as const, id: t.id, title: t.title, subject: t.subject, start: t.plannedStart, end: t.plannedEnd, done: t.done, state: t.supervision }))];
   const actual = sessions.filter(s => normalizedDate(s.date) === date).map(s => ({ ...s, running: false }));
   if (date === localISO() && timer.timerOn && timer.timerStartedAt) actual.push({ id: -1, date, module: timer.timerModule, seconds: timer.activeSeconds, startTime: `${pad(timer.timerStartedAt.getHours())}:${pad(timer.timerStartedAt.getMinutes())}`, endTime: `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`, running: true });
+  const plannedLayout = layoutTimelineEntries(planned.filter(x => x.start), x => x.start, x => x.end);
+  const actualLayout = layoutTimelineEntries(actual.filter(x => x.startTime), x => x.startTime, x => x.endTime);
+  const laneStyle = (lane: number, laneCount: number) => laneCount > 1 ? { left: `${lane * 100 / laneCount}%`, right: "auto", width: `calc(${100 / laneCount}% - 5px)` } : { left: "0", right: "auto", width: "100%" };
   const beginEdit = (item: typeof planned[number]) => { setEditing({ kind: item.kind, id: item.id }); setEditTitle(item.title); setEditStart(item.start || "08:00"); setEditEnd(item.end || "09:00"); };
   const saveEdit = () => {
     if (!editing) return;
@@ -453,7 +509,7 @@ function DailyPlan({ tasks, setTasks, routines, setRoutines, sessions, timer }: 
     <section className="panel schedule-dock"><div className="schedule-dock-head"><div><h2>待安排与时间设置</h2><p>未设时间的任务在这里直接安排，不必穿过时间轴来回翻页。</p></div></div>
       {(planned.some(x => !x.start) || actual.some(x => !x.startTime)) ? <div className="unscheduled"><div><strong>未设时间的任务</strong>{planned.filter(x => !x.start).map(item => <button className={editing?.kind === item.kind && editing.id === item.id ? "active" : ""} key={`${item.kind}${item.id}`} onClick={() => beginEdit(item)}>{item.title}<small>点击后就在下方安排时间</small></button>)}</div><div><strong>未记录具体时间的学习</strong>{actual.filter(x => !x.startTime).map(item => <span key={item.id}>{item.module} · {formatHours(item.seconds)}</span>)}</div></div> : <div className="all-scheduled">今天的任务都已设置时间，可点击时间轴中的任务继续修改。</div>}
       {editing && <div className="timeline-editor inline"><input value={editTitle} onChange={e => setEditTitle(e.target.value)} /><label>开始<input type="time" value={editStart} onChange={e => setEditStart(e.target.value)} /></label><label>结束<input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)} /></label><button className="primary-button" onClick={saveEdit}>保存安排</button><button className="soft-button" onClick={() => setEditing(null)}>取消</button></div>}</section>
-    <section className="panel daily-timeline-panel"><div className="timeline-panel-tools"><span>时间轴缩放 <b>{timelineZoom}%</b></span><input type="range" min="65" max="160" step="5" value={timelineZoom} onChange={e => setTimelineZoom(Number(e.target.value))} /><button className="timeline-reset" onClick={() => setTimelineZoom(100)}>↺ 恢复标准</button></div><div className="timeline-head"><span>预计任务安排</span><b>时间</b><span>实际学习记录</span></div><div className="daily-timeline" style={{ height: `${Math.round(1080 * timelineZoom / 100)}px` }}><div className="timeline-side planned-side">{planned.filter(x => x.start).map(item => <article key={`${item.kind}${item.id}`} className={`${item.done ? "done" : ""} ${item.state?.canceled ? "canceled" : ""} ${(item.state?.delayCount || 0) >= 2 ? "repeated-delay" : ""}`} style={{ top: `${timelineTop(item.start)}%`, minHeight: `${timelineHeight(item.start, item.end)}%` }}><button className="timeline-check" onClick={() => togglePlanned(item)}>{item.done ? "✓" : ""}</button><div onClick={() => beginEdit(item)}><strong>{item.title}</strong><small>{item.start}–{item.end} · {item.subject}{item.state?.canceled ? " · 今日取消" : item.state?.delayCount ? ` · 已推迟${item.state.delayCount}次` : ""}</small></div></article>)}</div><div className="timeline-axis">{Array.from({ length: 19 }, (_, i) => i + 6).map(h => <div key={h}><span>{pad(h)}:00</span><i /></div>)}</div><div className="timeline-side actual-side">{actual.filter(x => x.startTime).map(item => <article key={item.id} className={item.running ? "running" : ""} style={{ top: `${timelineTop(item.startTime)}%`, minHeight: `${timelineHeight(item.startTime, item.endTime)}%` }}><div><strong>{item.title || item.module}</strong><small>{item.startTime}–{item.endTime || "进行中"} · {formatHours(item.seconds)}</small></div></article>)}</div></div></section>
+    <section className="panel daily-timeline-panel"><div className="timeline-panel-tools"><span>时间轴缩放 <b>{timelineZoom}%</b></span><input type="range" min="65" max="160" step="5" value={timelineZoom} onChange={e => setTimelineZoom(Number(e.target.value))} /><button className="timeline-reset" onClick={() => setTimelineZoom(100)}>↺ 恢复标准</button></div><div className="timeline-head"><span>预计任务安排</span><b>时间</b><span>实际学习记录</span></div><div className="daily-timeline" style={{ height: `${Math.round(1080 * timelineZoom / 100)}px` }}><div className="timeline-side planned-side">{plannedLayout.map(({ item, lane, laneCount }) => <article key={`${item.kind}${item.id}`} className={`${item.done ? "done" : ""} ${item.state?.canceled ? "canceled" : ""} ${(item.state?.delayCount || 0) >= 2 ? "repeated-delay" : ""}`} style={{ top: `${timelineTop(item.start)}%`, minHeight: `${timelineHeight(item.start, item.end)}%`, ...laneStyle(lane, laneCount) }}><button className="timeline-check" onClick={() => togglePlanned(item)}>{item.done ? "✓" : ""}</button><div onClick={() => beginEdit(item)}><strong>{item.title}</strong><small>{item.start}–{item.end} · {item.subject}{item.state?.canceled ? " · 今日取消" : item.state?.delayCount ? ` · 已推迟${item.state.delayCount}次` : ""}</small></div></article>)}</div><div className="timeline-axis">{Array.from({ length: 19 }, (_, i) => i + 6).map(h => <div key={h}><span>{pad(h)}:00</span><i /></div>)}</div><div className="timeline-side actual-side">{actualLayout.map(({ item, lane, laneCount }) => <article key={item.id} className={item.running ? "running" : ""} style={{ top: `${timelineTop(item.startTime)}%`, minHeight: `${timelineHeight(item.startTime, item.endTime)}%`, ...laneStyle(lane, laneCount) }}><div><strong>{item.title || item.module}</strong><small>{item.startTime}–{item.endTime || "进行中"} · {formatHours(item.seconds)}</small></div></article>)}</div></div></section>
   </div>;
 }
 
