@@ -367,11 +367,32 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [toast, setToast] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerLastSyncRef = useRef<number | null>(null);
 
+  const elapsedSinceLastSync = () => {
+    if (!timerOn || timerPaused || timerLastSyncRef.current === null) return 0;
+    return Math.max(0, Math.floor((Date.now() - timerLastSyncRef.current) / 1000));
+  };
+  const syncActiveTimer = () => {
+    const elapsed = elapsedSinceLastSync();
+    if (elapsed <= 0) return;
+    if (timerLastSyncRef.current !== null) timerLastSyncRef.current += elapsed * 1000;
+    setActiveSeconds(seconds => seconds + elapsed);
+  };
   useEffect(() => {
-    if (timerOn && !timerPaused) timerRef.current = setInterval(() => setActiveSeconds(s => s + 1), 1000);
-    else if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (timerOn && !timerPaused) {
+      if (timerLastSyncRef.current === null) timerLastSyncRef.current = Date.now();
+      timerRef.current = setInterval(syncActiveTimer, 1000);
+    } else timerLastSyncRef.current = null;
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [timerOn, timerPaused]);
+  useEffect(() => {
+    const syncWhenVisible = () => { if (document.visibilityState === "visible") syncActiveTimer(); };
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("focus", syncActiveTimer);
+    window.addEventListener("pageshow", syncActiveTimer);
+    return () => { document.removeEventListener("visibilitychange", syncWhenVisible); window.removeEventListener("focus", syncActiveTimer); window.removeEventListener("pageshow", syncActiveTimer); };
   }, [timerOn, timerPaused]);
   useEffect(() => { if (timerTitle === "今日重点任务") setTimerTitle(""); }, [timerTitle, setTimerTitle]);
   useEffect(() => {
@@ -394,23 +415,33 @@ export default function App() {
   const beginTimerWithTask = (title: string, module: string, taskKey = "", source = "") => {
     const cleanTitle = title.trim();
     if (!cleanTitle) { flash("请先选择当日任务或填写具体学习内容"); return; }
+    const startedAt = new Date();
     setTimerTitle(cleanTitle); setTimerModule(module); setTimerTaskKey(taskKey); setTimerSource(source);
-    setTimerStartedAt(new Date()); setTimerPaused(false); setTimerPausedAt(null); setTimerOn(true);
+    setActiveSeconds(0); timerLastSyncRef.current = startedAt.getTime();
+    setTimerStartedAt(startedAt); setTimerPaused(false); setTimerPausedAt(null); setTimerOn(true);
   };
   const toggleTimer = () => {
     if (!timerOn) {
       if (!timerTitle.trim()) { flash("请先选择当日任务或填写具体学习内容"); return; }
-      setTimerStartedAt(new Date()); setTimerPaused(false); setTimerPausedAt(null); setTimerOn(true); return;
+      const startedAt = new Date();
+      setActiveSeconds(0); timerLastSyncRef.current = startedAt.getTime();
+      setTimerStartedAt(startedAt); setTimerPaused(false); setTimerPausedAt(null); setTimerOn(true); return;
     }
-    if (activeSeconds > 12 * 3600 && !window.confirm(`本次学习记录达到 ${formatHours(activeSeconds)}，超过12小时。确认记录无误并保存吗？`)) return;
+    const finalSeconds = activeSeconds + elapsedSinceLastSync();
+    if (finalSeconds > 12 * 3600 && !window.confirm(`本次学习记录达到 ${formatHours(finalSeconds)}，超过12小时。确认记录无误并保存吗？`)) return;
     const endedAt = timerPausedAt || new Date();
-    if (activeSeconds > 0) setSessions([...sessions, { id: Date.now(), date: localISO(timerStartedAt || endedAt), module: timerModule, title: timerTitle.trim(), source: timerSource.trim() || undefined, linkedTaskKey: timerTaskKey || undefined, seconds: activeSeconds, startTime: timerStartedAt ? `${pad(timerStartedAt.getHours())}:${pad(timerStartedAt.getMinutes())}` : undefined, endTime: `${pad(endedAt.getHours())}:${pad(endedAt.getMinutes())}` }]);
+    if (finalSeconds > 0) setSessions([...sessions, { id: Date.now(), date: localISO(timerStartedAt || endedAt), module: timerModule, title: timerTitle.trim(), source: timerSource.trim() || undefined, linkedTaskKey: timerTaskKey || undefined, seconds: finalSeconds, startTime: timerStartedAt ? `${pad(timerStartedAt.getHours())}:${pad(timerStartedAt.getMinutes())}` : undefined, endTime: `${pad(endedAt.getHours())}:${pad(endedAt.getMinutes())}` }]);
+    timerLastSyncRef.current = null;
     setTimerOn(false); setTimerPaused(false); setTimerPausedAt(null); setTimerStartedAt(null); setActiveSeconds(0); flash("本次学习时长已保存，并同步到实际学习时间轴");
   };
   const pauseTimer = () => {
     if (!timerOn) return;
-    if (timerPaused) { setTimerPaused(false); setTimerPausedAt(null); flash("专注计时已继续"); }
-    else { setTimerPaused(true); setTimerPausedAt(new Date()); flash("专注计时已暂停"); }
+    if (timerPaused) { timerLastSyncRef.current = Date.now(); setTimerPaused(false); setTimerPausedAt(null); flash("专注计时已继续"); }
+    else {
+      const finalSeconds = activeSeconds + elapsedSinceLastSync();
+      setActiveSeconds(finalSeconds); timerLastSyncRef.current = null;
+      setTimerPaused(true); setTimerPausedAt(new Date()); flash("专注计时已暂停");
+    }
   };
   const todayTasks = tasks.filter(t => normalizedDate(t.date) === localISO());
   const todayRoutines = routines.filter(r => r.month === localISO().slice(0, 7) && routineApplies(r, localISO()));
@@ -567,14 +598,25 @@ function DailyPlan({ tasks, setTasks, routines, setRoutines, sessions, timer }: 
   const plannedTotal = planned.reduce((sum, item) => sum + item.slots.reduce((slotSum, slot) => slotSum + Math.max(0, (timeMinutes(slot.end) || 0) - (timeMinutes(slot.start) || 0)), 0), 0);
   const previousDate = shiftISODate(date, -1);
   const previousUnfinished = [
-    ...routines.filter(routine => routine.month === previousDate.slice(0, 7) && routineApplies(routine, previousDate) && !routine.completedDates.includes(previousDate)).map(routine => ({ key: `routine-${routine.id}`, kind: "每日任务", title: routine.title, subject: routine.subject, time: formatPlannedSlots(routine), reason: routine.supervision?.[previousDate]?.incompleteReason })),
-    ...tasks.filter(task => normalizedDate(task.date) === previousDate && !task.done).map(task => ({ key: `task-${task.id}`, kind: "单日任务", title: task.title, subject: task.subject, time: formatPlannedSlots(task), reason: task.supervision?.incompleteReason })),
+    ...routines.filter(routine => routine.month === previousDate.slice(0, 7) && routineApplies(routine, previousDate) && !routine.completedDates.includes(previousDate)).map(routine => ({ key: `routine-${routine.id}`, kind: "每日任务", title: routine.title, subject: routine.subject, time: formatPlannedSlots(routine), reason: routine.supervision?.[previousDate]?.incompleteReason, slots: plannedSlotsOf(routine), minutes: plannedMinutesOf(routine) })),
+    ...tasks.filter(task => normalizedDate(task.date) === previousDate && !task.done).map(task => ({ key: `task-${task.id}`, kind: "单日任务", title: task.title, subject: task.subject, time: formatPlannedSlots(task), reason: task.supervision?.incompleteReason, slots: plannedSlotsOf(task), minutes: plannedMinutesOf(task) })),
   ];
+  const carryUnfinishedToSelectedDate = (item: typeof previousUnfinished[number]) => {
+    const carryTitle = item.title.startsWith("补做：") ? item.title : `补做：${item.title}`;
+    const duplicate = tasks.some(task => normalizedDate(task.date) === date && task.title.trim() === carryTitle);
+    if (duplicate && !window.confirm(`“${carryTitle}”已在 ${date} 的预计学习中，仍要再添加一次吗？`)) return;
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const slots = item.slots.length ? item.slots.map(slot => ({ ...slot })) : [{ start: "08:00", end: "09:00" }];
+    const totalMinutes = slots.reduce((sum, slot) => sum + Math.max(0, (timeMinutes(slot.end) || 0) - (timeMinutes(slot.start) || 0)), 0);
+    const carriedTask: Task = { id, title: carryTitle, subject: item.subject, minutes: totalMinutes || item.minutes || 45, done: false, date, plannedSlots: slots, plannedStart: slots[0].start, plannedEnd: slots[slots.length - 1].end };
+    setTasks([...tasks, carriedTask]);
+    setEditing({ kind: "task", id }); setEditTitle(carryTitle); setEditSlots(slots);
+  };
   const editTotalMinutes = editSlots.reduce((sum, slot) => validTimeRange(slot.start, slot.end) ? sum + (timeMinutes(slot.end) || 0) - (timeMinutes(slot.start) || 0) : sum, 0);
   return <div className="page-stack">
     <section className="page-intro daily-intro"><div><p className="eyebrow">DAILY TIMELINE</p><h2>计划时间与真实投入并排看</h2><p>左边是预计安排，右边由学习计时自动生成实际完成时段。</p><span className="sync-badge">✓ 已与月度计划实时同步</span></div><input type="date" value={date} onChange={e => setDate(e.target.value)} /></section>
     <section className="daily-summary"><div><strong>{doneCount}/{planned.length}</strong><span>任务完成</span></div><div><strong>{formatHours(actual.reduce((sum, session) => sum + session.seconds, 0))}</strong><span>实际学习</span></div><div><strong>{plannedTotal}m</strong><span>计划投入</span></div><div className={lostToday ? "delay-summary" : ""}><strong>{lostToday}m</strong><span>拖延损失</span></div></section>
-    <section className="panel yesterday-unfinished-panel"><div className="yesterday-unfinished-head"><div><p className="eyebrow">UNFINISHED</p><h2>昨日未完成任务</h2><span>{previousDate} 的未完成内容会保留在这里，避免被新一天的计划覆盖。</span></div><strong>{previousUnfinished.length} 项</strong></div>{previousUnfinished.length ? <div className="yesterday-unfinished-list">{previousUnfinished.map(item => <article key={item.key}><span>{item.kind}</span><div><strong>{item.title}</strong><small>{item.subject} · {item.time}</small></div><em>{item.reason || "尚未记录未完成原因"}</em></article>)}</div> : <div className="all-scheduled">昨日任务已全部完成。</div>}</section>
+    <section className="panel yesterday-unfinished-panel"><div className="yesterday-unfinished-head"><div><p className="eyebrow">UNFINISHED</p><h2>昨日未完成任务</h2><span>{previousDate} 的未完成内容会保留在这里，可选择补入 {date} 的预计学习并重新调整时间。</span></div><strong>{previousUnfinished.length} 项</strong></div>{previousUnfinished.length ? <div className="yesterday-unfinished-list">{previousUnfinished.map(item => <article key={item.key}><span>{item.kind}</span><div><strong>{item.title}</strong><small>{item.subject} · {item.time}</small></div><em>{item.reason || "尚未记录未完成原因"}</em><button type="button" onClick={() => carryUnfinishedToSelectedDate(item)}>＋ 加入{date === localISO() ? "今日" : "所选日"}预计</button></article>)}</div> : <div className="all-scheduled">昨日任务已全部完成。</div>}</section>
     <section className="panel schedule-dock"><div className="schedule-dock-head"><div><h2>待安排与时间设置</h2><p>未设时间的任务在这里直接安排；已安排任务可在时间轴中修改为1至3个时间段。</p></div></div>{(planned.some(x => !x.slots.length) || actual.some(x => !x.startTime)) ? <div className="unscheduled"><div><strong>未设时间的任务</strong>{planned.filter(x => !x.slots.length).map(item => <button className={editing?.kind === item.kind && editing.id === item.id ? "active" : ""} key={`${item.kind}${item.id}`} onClick={() => beginEdit(item)}>{item.title}<small>点击后安排1至3个时间段</small></button>)}</div><div><strong>未记录具体时间的学习</strong>{actual.filter(x => !x.startTime).map(item => <span key={item.id}>{item.module} · {formatHours(item.seconds)}</span>)}</div></div> : <div className="all-scheduled">今天的任务都已设置时间，可点击时间轴中的任务继续修改。</div>}</section>
     <section className="panel daily-timeline-panel"><div className="timeline-panel-tools"><span>时间轴缩放 <b>{timelineZoom}%</b></span><input type="range" min="65" max="160" step="5" value={timelineZoom} onChange={e => setTimelineZoom(Number(e.target.value))} /><button className="timeline-reset" onClick={() => setTimelineZoom(100)}>↺ 恢复标准</button></div><div className="timeline-head"><span>预计任务安排</span><b>时间</b><span>实际学习记录</span></div><div className="daily-timeline" style={{ height: `${Math.round(1080 * timelineZoom / 100)}px` }}><div className="timeline-side planned-side">{plannedLayout.map(({ item, lane, laneCount }) => <article title={`${item.title} · ${item.start}–${item.end} · 点击修改全部预计时间段`} key={`${item.kind}${item.id}-${item.slotIndex}`} className={`${item.done ? "done" : ""} ${item.state?.canceled ? "canceled" : ""} ${(item.state?.delayCount || 0) >= 2 ? "repeated-delay" : ""} ${timelineDensity(item.start, item.end)}`} style={{ top: `${timelineTop(item.start)}%`, height: `${timelineHeight(item.start, item.end)}%`, ...laneStyle(lane, laneCount) }}><button className="timeline-check" onClick={event => { event.stopPropagation(); togglePlanned(item); }}>{item.done ? "✓" : ""}</button><button className="timeline-edit-trigger" title="修改预计时间段" aria-label={`修改${item.title}的预计时间段`} onClick={event => { event.stopPropagation(); beginEdit(item); }}>✎</button><div className="timeline-inline" onClick={() => beginEdit(item)}><span className="timeline-time">{item.start}–{item.end}</span><strong>{item.title}</strong><small>{item.subject}{item.state?.canceled ? " · 今日取消" : item.state?.delayCount ? ` · 已推迟${item.state.delayCount}次` : ""}</small></div></article>)}</div><div className="timeline-axis">{Array.from({ length: 19 }, (_, i) => i + 6).map((h, index) => <div key={h} style={{ top: `${index * 100 / 18}%` }}><span>{pad(h)}:00</span><i /></div>)}</div><div className="timeline-side actual-side">{actualLayout.map(({ item, lane, laneCount }) => <article title={`${item.title || item.module} · ${item.startTime}–${item.endTime || "进行中"}`} key={item.id} className={`${item.running ? "running" : ""} ${item.paused ? "paused" : ""} ${timelineDensity(item.startTime, item.endTime)}`} style={{ top: `${timelineTop(item.startTime)}%`, height: `${timelineHeight(item.startTime, item.endTime)}%`, ...laneStyle(lane, laneCount) }}><div className="timeline-inline"><span className="timeline-time">{item.startTime}–{item.endTime || "进行中"}</span><strong>{item.title || item.module}</strong><small>{item.module} · {formatHours(item.seconds)}{item.paused ? " · 已暂停" : ""}</small></div></article>)}</div></div></section>
     {editing && <div className="timeline-edit-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null); }}><div className="timeline-edit-dialog timeline-multi-slot-dialog" role="dialog" aria-modal="true" aria-label="修改预计学习时间"><div className="timeline-edit-dialog-head"><div><p className="eyebrow">PLANNED TIME</p><h3>修改预计学习时间</h3><span>可为同一任务设置1至3个不重叠的时间段。</span></div><button type="button" aria-label="关闭" onClick={() => setEditing(null)}>×</button></div><label>学习内容<input value={editTitle} onChange={e => setEditTitle(e.target.value)} /></label><div className="timeline-slot-list">{editSlots.map((slot, index) => <div className="timeline-slot-row" key={index}><b>时段 {index + 1}</b><label>开始<input type="time" value={slot.start} onChange={e => updateEditSlot(index, "start", e.target.value)} /></label><label>结束<input type="time" value={slot.end} onChange={e => updateEditSlot(index, "end", e.target.value)} /></label>{editSlots.length > 1 && <button type="button" aria-label={`删除时段${index + 1}`} onClick={() => setEditSlots(current => current.filter((_, slotIndex) => slotIndex !== index))}>删除</button>}</div>)}</div>{editSlots.length < 3 && <button className="timeline-add-slot" type="button" onClick={() => { const last = editSlots[editSlots.length - 1]; const nextStartMinutes = Math.min(1380, (timeMinutes(last.end) || 540) + 30); setEditSlots(current => [...current, { start: `${pad(Math.floor(nextStartMinutes / 60))}:${pad(nextStartMinutes % 60)}`, end: `${pad(Math.floor(Math.min(1439, nextStartMinutes + 60) / 60))}:${pad(Math.min(1439, nextStartMinutes + 60) % 60)}` }]); }}>＋ 添加时间段</button>}<p className="timeline-edit-duration">有效学习总时长：{editTotalMinutes} 分钟 · 中间间隔不会计入任务时长</p><div className="timeline-edit-actions"><button className="soft-button" type="button" onClick={() => setEditing(null)}>取消</button><button className="primary-button" type="button" onClick={saveEdit}>保存并同步月度计划</button></div></div></div>}
