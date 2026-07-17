@@ -315,3 +315,65 @@ input[type="date"],input[type="month"],input[type="time"]{color-scheme:light;acc
 .session-task-copy{display:flex;min-width:0;flex-direction:column;gap:3px}.session-task-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.session-task-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:var(--muted)}
 .day-history article div strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.day-history article div small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:760px){.focus-field-grid{grid-template-columns:1fr}.focus-task-tags{max-height:190px}.session-list>div{grid-template-columns:62px minmax(0,1fr) 52px 70px}}
+
+/* v20: planned timeline cards can be edited in place without scrolling back to the schedule dock. */
+.planned-side article{cursor:pointer;padding-right:30px}
+.timeline-edit-trigger{
+  position:absolute;
+  top:50%;
+  right:6px;
+  z-index:3;
+  width:20px;
+  height:20px;
+  transform:translateY(-50%);
+  border:1px solid color-mix(in srgb,var(--primary) 28%,var(--line));
+  border-radius:7px;
+  background:color-mix(in srgb,var(--panel) 88%,var(--primary));
+  color:var(--primary-deep);
+  font-size:11px;
+  line-height:18px;
+  padding:0;
+  cursor:pointer;
+  opacity:.72;
+  transition:opacity .16s ease,transform .16s ease,background .16s ease;
+}
+.planned-side article:hover .timeline-edit-trigger,.timeline-edit-trigger:focus-visible{opacity:1;transform:translateY(-50%) scale(1.06);background:color-mix(in srgb,var(--primary) 18%,var(--panel))}
+.planned-side article.compact,.planned-side article.micro{padding-right:25px}
+.planned-side article.micro .timeline-edit-trigger{width:17px;height:17px;right:3px;border-radius:5px;font-size:9px;line-height:15px}
+.timeline-edit-overlay{
+  position:fixed;
+  inset:0;
+  z-index:1200;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(33,31,28,.32);
+  backdrop-filter:blur(4px);
+}
+.timeline-edit-dialog{
+  width:min(480px,100%);
+  padding:22px;
+  border:1px solid color-mix(in srgb,var(--primary) 22%,var(--line));
+  border-radius:22px;
+  background:var(--panel);
+  box-shadow:0 24px 70px rgba(42,38,32,.22);
+}
+.timeline-edit-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.timeline-edit-dialog-head h3{margin:2px 0 0;font-size:20px}
+.timeline-edit-dialog-head>button{width:32px;height:32px;border:0;border-radius:10px;background:color-mix(in srgb,var(--primary) 9%,var(--page));color:var(--primary-deep);font-size:20px;cursor:pointer}
+.timeline-edit-dialog>label,.timeline-edit-time-grid label{display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--muted)}
+.timeline-edit-dialog input{height:42px;border:1px solid var(--line);border-radius:12px;background:var(--page);color:var(--ink);padding:0 12px}
+.timeline-edit-time-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.timeline-edit-duration{margin:12px 0 0;padding:10px 12px;border-radius:11px;background:color-mix(in srgb,var(--primary) 8%,var(--page));color:var(--primary-deep);font-size:11px}
+.timeline-edit-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+.timeline-edit-actions button{min-height:40px}
+
+/* The study record's saved module is authoritative; linked plan metadata is only a relationship marker. */
+.form-card label>small{display:block;margin-top:5px;font-size:9px;line-height:1.35;color:var(--muted)}
+
+@media(max-width:760px){
+  .timeline-edit-dialog{padding:18px;border-radius:18px}
+  .timeline-edit-time-grid{grid-template-columns:1fr}
+  .timeline-edit-actions{flex-direction:column-reverse}
+  .timeline-edit-actions button{width:100%}
+}
