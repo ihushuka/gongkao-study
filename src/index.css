@@ -404,3 +404,58 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 @media(max-width:1180px){.life-event-form{grid-template-columns:repeat(3,minmax(0,1fr))}.life-title-field{grid-column:auto}.life-time-row{grid-column:2/4}.life-note-field{grid-column:1/3}.life-form-actions{grid-column:3;align-self:end}}
 @media(max-width:760px){.life-event-head{flex-direction:column}.life-event-form{grid-template-columns:1fr 1fr}.life-title-field,.life-time-row,.life-note-field{grid-column:1/-1}.life-time-row{grid-template-columns:1fr 1fr}.life-form-actions{grid-column:1/-1}.life-event-list article{grid-template-columns:32px minmax(0,1fr) auto}.life-event-list article>.life-delete{grid-column:3}.life-event-form label>small{white-space:normal}.timeline-full-day .timeline-axis span{font-size:8px}}
 @media(max-width:460px){.life-time-row{grid-template-columns:1fr 1fr;gap:6px}.life-time-row label{font-size:8px}.life-time-row input{padding:0 6px}}
+
+/* v29 日常事件表单对齐、类型库管理、实际学习记录直接编辑 */
+.life-event-form{
+  grid-template-columns:170px 180px 205px minmax(240px,1fr) 160px 160px!important;
+  align-items:start!important;
+}
+.life-event-form>.life-date-field,
+.life-event-form>.life-category-field,
+.life-event-form>.life-side-field,
+.life-event-form>.life-title-field,
+.life-event-form>.life-start-field,
+.life-event-form>.life-end-field{
+  grid-column:auto!important;
+  align-self:start;
+}
+.life-event-form label{justify-content:flex-start}
+.life-event-form input,.life-event-form select{height:40px}
+.life-form-hint{grid-column:1/-1;margin-top:-2px;font-size:8px;line-height:1.45;color:var(--muted)}
+.life-note-field{grid-column:1/5!important}
+.life-form-actions{grid-column:5/7!important;align-self:end!important;min-height:40px;align-items:flex-end}
+.life-category-manager{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px dashed color-mix(in srgb,var(--primary) 18%,var(--line));border-radius:13px;background:color-mix(in srgb,var(--primary) 2%,var(--page))}
+.life-category-manager>span{flex:0 0 auto;padding-top:5px;font-size:9px;color:var(--muted)}
+.life-category-manager>div{display:flex;flex:1;flex-wrap:wrap;gap:7px;min-width:0}
+.life-category-chip{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:3px 4px 3px 9px;border:1px solid color-mix(in srgb,var(--primary) 16%,var(--line));border-radius:999px;background:var(--panel)}
+.life-category-chip b{font-size:9px;font-weight:600;color:var(--ink)}
+.life-category-chip button{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:999px;background:color-mix(in srgb,var(--primary) 8%,var(--page));color:var(--primary-deep);font-size:10px;cursor:pointer}
+.life-category-chip button.delete{background:color-mix(in srgb,var(--rose) 42%,var(--panel));color:#965d66}
+.actual-side article.actual-study-block{padding-right:30px}
+.actual-side article.actual-study-block .timeline-edit-trigger{display:block;opacity:.78;border-color:color-mix(in srgb,var(--accent) 34%,var(--line));background:color-mix(in srgb,var(--panel) 88%,var(--accent));color:var(--accent)}
+.actual-side article.actual-study-block:hover .timeline-edit-trigger,.actual-side article.actual-study-block .timeline-edit-trigger:focus-visible{opacity:1;transform:translateY(-50%) scale(1.06)}
+.actual-session-dialog{width:min(520px,100%)}
+.actual-session-name{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--accent) 8%,var(--page))}
+.actual-session-name small{font-size:9px;color:var(--muted)}
+.actual-session-name strong{font-size:12px;color:var(--ink)}
+.actual-session-note{margin-top:14px}
+
+@media(max-width:1320px){
+  .life-event-form{grid-template-columns:150px 160px 185px minmax(210px,1fr) 145px 145px!important}
+}
+@media(max-width:1100px){
+  .life-event-form{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .life-event-form>.life-date-field,.life-event-form>.life-category-field,.life-event-form>.life-side-field{grid-row:1}
+  .life-event-form>.life-title-field{grid-column:1/2!important}
+  .life-event-form>.life-start-field{grid-column:2/3!important}
+  .life-event-form>.life-end-field{grid-column:3/4!important}
+  .life-note-field{grid-column:1/3!important}
+  .life-form-actions{grid-column:3/4!important}
+}
+@media(max-width:760px){
+  .life-event-form{grid-template-columns:1fr 1fr!important}
+  .life-event-form>.life-date-field,.life-event-form>.life-category-field,.life-event-form>.life-side-field,.life-event-form>.life-title-field,.life-event-form>.life-start-field,.life-event-form>.life-end-field{grid-row:auto!important;grid-column:auto!important}
+  .life-note-field,.life-form-hint,.life-form-actions{grid-column:1/-1!important}
+  .life-category-manager{flex-direction:column;gap:7px}
+  .life-category-manager>span{padding-top:0}
+}
