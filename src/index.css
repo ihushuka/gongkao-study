@@ -502,3 +502,10 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
   .life-event-form>.life-date-field,.life-event-form>.life-category-field,.life-event-form>.life-side-field,.life-event-form>.life-title-field,.life-event-form>.life-start-field,.life-event-form>.life-end-field{grid-row:auto!important;grid-column:auto!important}
   .life-note-field,.life-form-hint,.life-form-actions{grid-column:1/-1!important}
 }
+
+/* v31: shared draggable study-module order + homepage without timer card */
+.dashboard-grid-single{grid-template-columns:minmax(0,1fr)!important}
+.module-option-row .option-drag-handle{width:30px;height:35px;display:grid;place-items:center;flex:0 0 30px;border-right:1px solid var(--line);color:var(--muted);font-style:normal;font-weight:700;cursor:grab;user-select:none;background:color-mix(in srgb,var(--primary) 4%,transparent)}
+.module-option-row .option-drag-handle:active{cursor:grabbing}
+.module-option-row:has(.option-drag-handle:hover){border-color:color-mix(in srgb,var(--primary) 30%,var(--line));background:color-mix(in srgb,var(--primary) 4%,var(--page))}
+.module-option-list .module-option-row input{width:112px}
