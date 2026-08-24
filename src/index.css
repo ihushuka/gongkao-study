@@ -509,3 +509,10 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .module-option-row .option-drag-handle:active{cursor:grabbing}
 .module-option-row:has(.option-drag-handle:hover){border-color:color-mix(in srgb,var(--primary) 30%,var(--line));background:color-mix(in srgb,var(--primary) 4%,var(--page))}
 .module-option-list .module-option-row input{width:112px}
+
+/* v32: completed monthly-plan tasks stay synchronized with Study Timer choices. */
+.focus-task-tags button.done{border-color:color-mix(in srgb,var(--muted) 24%,var(--line));background:color-mix(in srgb,var(--muted) 7%,var(--panel));opacity:.62}
+.focus-task-tags button.done strong{text-decoration:line-through;color:var(--muted)}
+.focus-task-tags button.done small{color:color-mix(in srgb,var(--muted) 88%,var(--ink))}
+.focus-task-tags.manual button.done{opacity:.72}
+.focus-task-tags.manual button.done:not(:disabled){cursor:pointer}
