@@ -516,3 +516,10 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .focus-task-tags button.done small{color:color-mix(in srgb,var(--muted) 88%,var(--ink))}
 .focus-task-tags.manual button.done{opacity:.72}
 .focus-task-tags.manual button.done:not(:disabled){cursor:pointer}
+
+/* v33: single-day multi-slot editor */
+.single-task-slot-editor{margin:2px 0 15px;padding:12px;border:1px solid color-mix(in srgb,var(--primary) 13%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--primary) 3%,var(--page));min-width:0;overflow:hidden}
+.single-task-slot-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-bottom:8px}.single-task-slot-head strong{font-size:11px;color:var(--ink)}.single-task-slot-head small{font-size:9px;color:var(--muted);text-align:right}.single-task-slot-total{margin:9px 1px 0;font-size:9px;color:var(--muted)}.single-task-slot-total b{color:var(--primary-deep)}
+.month-side .single-task-slot-editor .timeline-slot-row{grid-template-columns:48px minmax(0,1fr) minmax(0,1fr);align-items:end}.month-side .single-task-slot-editor .timeline-slot-row>button{grid-column:2/-1;width:max-content;justify-self:end}.month-side .single-task-slot-editor input{min-width:0;width:100%}
+@media(max-width:1180px){.month-side .single-task-slot-editor .timeline-slot-row{grid-template-columns:58px minmax(0,1fr) minmax(0,1fr) auto}.month-side .single-task-slot-editor .timeline-slot-row>button{grid-column:auto;width:auto;justify-self:auto}}
+@media(max-width:760px){.single-task-slot-head{align-items:flex-start;flex-direction:column}.single-task-slot-head small{text-align:left}.month-side .single-task-slot-editor .timeline-slot-row{grid-template-columns:1fr 1fr}.month-side .single-task-slot-editor .timeline-slot-row>b,.month-side .single-task-slot-editor .timeline-slot-row>button{grid-column:1/-1}.month-side .single-task-slot-editor .timeline-slot-row>button{width:100%}}
