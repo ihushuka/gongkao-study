@@ -459,3 +459,46 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
   .life-category-manager{flex-direction:column;gap:7px}
   .life-category-manager>span{padding-top:0}
 }
+
+/* v30 拖动排序、日常事件表单防溢出与浅灰时间轴边框 */
+.life-event-form{
+  box-sizing:border-box;
+  width:100%;
+  max-width:100%;
+  grid-template-columns:minmax(0,.95fr) minmax(0,1fr) minmax(0,1.12fr) minmax(0,1.42fr) minmax(0,.9fr) minmax(0,.9fr)!important;
+  overflow:hidden;
+}
+.life-event-form>*{min-width:0;box-sizing:border-box}
+.life-event-form input,.life-event-form select{box-sizing:border-box;max-width:100%}
+.life-form-actions{min-width:0;max-width:100%;flex-wrap:wrap;overflow:hidden}
+.life-form-actions button{max-width:100%}
+.life-category-manager>span{display:flex;flex-direction:column;gap:2px}
+.life-category-manager>span small{font-size:8px;color:var(--muted);white-space:nowrap}
+.life-category-chip{transition:transform .14s ease,border-color .14s ease,background .14s ease}
+.life-category-chip:has(.life-category-drag:active){opacity:.72}
+.life-category-drag{display:grid;place-items:center;width:20px;height:22px;margin-left:-2px;border-radius:999px;color:var(--muted);font-style:normal;font-size:13px;line-height:1;cursor:grab;user-select:none}
+.life-category-drag:active{cursor:grabbing;background:color-mix(in srgb,var(--primary) 7%,var(--page))}
+.timeline-side article.life-event-block{
+  border:1px dashed color-mix(in srgb,var(--line) 78%,var(--page))!important;
+  box-shadow:0 4px 10px color-mix(in srgb,var(--line) 22%,transparent)!important;
+}
+.planned-side article.life-event-block{box-shadow:inset 3px 0 color-mix(in srgb,var(--primary) 34%,transparent),0 4px 10px color-mix(in srgb,var(--line) 22%,transparent)!important}
+.actual-side article.life-event-block{box-shadow:inset -3px 0 color-mix(in srgb,var(--accent) 34%,transparent),0 4px 10px color-mix(in srgb,var(--line) 22%,transparent)!important}
+.layout-editing [data-ui-module][draggable="true"]{cursor:grab}
+.layout-editing [data-ui-module].ui-dragging{opacity:.45;cursor:grabbing;outline-style:solid!important}
+.layout-editing [data-ui-module].ui-drag-target{outline:3px solid color-mix(in srgb,var(--accent) 70%,var(--primary))!important;outline-offset:5px}
+.layout-editor-head span::after{content:" · 页面模块可直接拖动排序"}
+@media(max-width:1320px){
+  .life-event-form{grid-template-columns:repeat(3,minmax(0,1fr))!important;overflow:visible}
+  .life-event-form>.life-date-field,.life-event-form>.life-category-field,.life-event-form>.life-side-field{grid-row:1}
+  .life-event-form>.life-title-field{grid-column:1/2!important}
+  .life-event-form>.life-start-field{grid-column:2/3!important}
+  .life-event-form>.life-end-field{grid-column:3/4!important}
+  .life-note-field{grid-column:1/3!important}
+  .life-form-actions{grid-column:3/4!important}
+}
+@media(max-width:760px){
+  .life-event-form{grid-template-columns:1fr 1fr!important}
+  .life-event-form>.life-date-field,.life-event-form>.life-category-field,.life-event-form>.life-side-field,.life-event-form>.life-title-field,.life-event-form>.life-start-field,.life-event-form>.life-end-field{grid-row:auto!important;grid-column:auto!important}
+  .life-note-field,.life-form-hint,.life-form-actions{grid-column:1/-1!important}
+}
