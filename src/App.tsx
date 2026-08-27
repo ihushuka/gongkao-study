@@ -46,6 +46,14 @@ const normalizedDate = (value?: string) => {
   if (/^\d{2}-\d{2}$/.test(value)) return `${new Date().getFullYear()}-${value}`;
   return localISO();
 };
+const validISODateInput = (value?: string) => {
+  const clean = (value || "").trim().replace(/\//g, "-");
+  const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? clean : "";
+};
 const formatShortDate = (value: string) => normalizedDate(value).slice(5).replace("-", "/");
 const formatClock = (seconds: number) => `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
 const formatHours = (seconds: number) => `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
@@ -1151,11 +1159,13 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   };
   const assignHistoryDate = () => {
     if (!historySelection.length) { flash("请先选择这一天完成的课时"); return; }
-    if (!/^20\\d{2}-\\d{2}-\\d{2}$/.test(historyDate)) { flash("请选择有效完成日期"); return; }
-    setHistoryDates(current => { const next = { ...current }; historySelection.forEach(lesson => { next[String(lesson)] = historyDate; }); return next; });
+    const validDate = validISODateInput(historyDate);
+    if (!validDate) { flash("请选择有效完成日期"); return; }
+    setHistoryDate(validDate);
+    setHistoryDates(current => { const next = { ...current }; historySelection.forEach(lesson => { next[String(lesson)] = validDate; }); return next; });
     setLegacyUndated(current => current.filter(lesson => !historySelection.includes(lesson)));
     setHistorySelection([]);
-    flash(`已记录 ${formatShortDate(historyDate)} 完成的课时`);
+    flash(`已记录 ${formatShortDate(validDate)} 完成的课时`);
   };
   const removeHistoryGroup = (date: string) => setHistoryDates(current => Object.fromEntries(Object.entries(current).filter(([, value]) => value !== date)));
   const syncHistoricalCalendarTasks = (presetId: number, presetTitle: string, presetSubject: string, dates: Record<string, string>) => {
