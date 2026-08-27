@@ -767,3 +767,17 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 /* v40: allow completed lessons to be recorded before their dates are known */
 .history-complete-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px dashed color-mix(in srgb,var(--primary) 32%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--primary) 5%,var(--panel))}.history-complete-toolbar .primary-button{width:auto;min-height:38px;margin:0;padding:0 14px}.history-complete-toolbar span{font-size:8px;color:var(--muted);line-height:1.5}.dated-history-editor .lesson-chip-grid button.history-undated small{color:var(--primary-deep);font-weight:700}
 @media(max-width:760px){.history-complete-toolbar{align-items:stretch;flex-direction:column}.history-complete-toolbar .primary-button{width:100%}}
+
+
+/* v41: roomier monthly calendar + stable schedule-duration editing */
+.month-plan-page{max-width:min(1540px,100%)!important}
+.month-plan-page .month-layout{grid-template-columns:minmax(0,1fr) 300px;gap:20px}
+.month-plan-page .calendar-panel{padding:20px}
+.month-plan-page .calendar-cell{min-height:156px;padding:10px}
+.month-plan-page .day-tasks{max-height:112px;gap:6px}
+.month-plan-page .calendar-task label{font-size:10.5px;line-height:1.35;align-items:center}
+.month-plan-page .calendar-task label span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.month-plan-page .calendar-task>button{margin-top:0}
+.preset-schedule-controls input[type="number"]{min-width:0;width:100%}
+@media(max-width:1180px){.month-plan-page .month-layout{grid-template-columns:1fr}.month-plan-page .calendar-cell{min-height:148px}.month-plan-page .day-tasks{max-height:105px}}
+@media(max-width:760px){.month-plan-page .calendar-week,.month-plan-page .calendar-grid{min-width:840px}.month-plan-page .calendar-cell{min-height:145px}.month-plan-page .day-tasks{max-height:102px}}
