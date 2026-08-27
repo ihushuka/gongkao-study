@@ -763,3 +763,7 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 @media(max-width:1180px){.preset-schedule-controls{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.preset-schedule-controls{grid-template-columns:1fr 1fr}.task-deadline-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.preset-schedule-controls,.task-deadline-grid{grid-template-columns:1fr}.preset-schedule-preview>div:first-child{align-items:flex-start;flex-direction:column}}
+
+/* v40: allow completed lessons to be recorded before their dates are known */
+.history-complete-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px dashed color-mix(in srgb,var(--primary) 32%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--primary) 5%,var(--panel))}.history-complete-toolbar .primary-button{width:auto;min-height:38px;margin:0;padding:0 14px}.history-complete-toolbar span{font-size:8px;color:var(--muted);line-height:1.5}.dated-history-editor .lesson-chip-grid button.history-undated small{color:var(--primary-deep);font-weight:700}
+@media(max-width:760px){.history-complete-toolbar{align-items:stretch;flex-direction:column}.history-complete-toolbar .primary-button{width:100%}}
