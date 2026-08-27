@@ -4,8 +4,8 @@ import * as XLSX from "xlsx";
 type Tab = "home" | "daily" | "sleep" | "plan" | "tasklib" | "study" | "practice" | "idiom" | "mistakes" | "review" | "reports" | "settings";
 type SupervisionState = { delayCount?: number; postponedUntil?: string; reasons?: string[]; canceled?: boolean; promptedAt?: string; lostMinutes?: number; incompleteReason?: string };
 type TimeSlot = { start: string; end: string };
-type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[] };
-type StudyTaskPreset = { id: number; title: string; subject: string; totalLessons: number; order?: number; completedLessons?: number[] };
+type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; historyPresetRecord?: boolean };
+type StudyTaskPreset = { id: number; title: string; subject: string; totalLessons: number; order?: number; completedLessons?: number[]; lessonCompletionDates?: Record<string, string> };
 type DailyRoutine = { id: number; title: string; subject: string; minutes: number; month: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; completedDates: string[]; skippedDates?: string[]; supervision?: Record<string, SupervisionState> };
 type Practice = { id: number; date: string; source: string; module: string; correct: number; total: number; minutes: number };
 type StudySession = { id: number; date: string; module: string; seconds: number; startTime?: string; endTime?: string; title?: string; source?: string; note?: string; linkedTaskKey?: string };
@@ -877,7 +877,7 @@ function DailyPlan({ tasks, setTasks, routines, setRoutines, sessions, setSessio
   const [editSlots, setEditSlots] = useState<TimeSlot[]>([{ start: "08:00", end: "09:00" }]);
   const [lifeEvents, setLifeEvents] = useStoredState<LifeEvent[]>("shore-life-events", []);
   const [lifeDate, setLifeDate] = useState(date);
-  const [lifeCategory, setLifeCategory] = useState<LifeEventCategory>("吃饭");
+  const [lifeCategory, setLifeCategory] = useState<LifeEventCategory>("");
   const [lifeTitle, setLifeTitle] = useState("");
   const [lifeSide, setLifeSide] = useState<LifeEventSide>("actual");
   const [lifeTiming, setLifeTiming] = useState<LifeEventTiming>("range");
@@ -948,7 +948,7 @@ function DailyPlan({ tasks, setTasks, routines, setRoutines, sessions, setSessio
     if (item.kind === "task") setTasks(tasks.map(task => task.id === item.id ? { ...task, done: !task.done } : task));
     else setRoutines(routines.map(routine => routine.id === item.id ? { ...routine, completedDates: item.done ? routine.completedDates.filter(day => day !== date) : [...routine.completedDates, date] } : routine));
   };
-  const resetLifeForm = () => { setLifeEditingId(null); setLifeDate(date); setLifeCategory("吃饭"); setLifeTitle(""); setLifeSide("actual"); setLifeTiming("range"); setLifeStart("12:00"); setLifeEnd("12:30"); setLifeNote(""); };
+  const resetLifeForm = () => { setLifeEditingId(null); setLifeDate(date); setLifeCategory(""); setLifeTitle(""); setLifeSide("actual"); setLifeTiming("range"); setLifeStart("12:00"); setLifeEnd("12:30"); setLifeNote(""); };
   const editLifeEvent = (event: LifeEvent) => { setLifeEditingId(event.id); setLifeDate(normalizedDate(event.date)); setLifeCategory(event.category); setLifeTitle(event.title); setLifeSide(event.side); setLifeTiming(event.timing === "point" ? "point" : "range"); setLifeStart(event.startTime); setLifeEnd(event.endTime || "12:30"); setLifeNote(event.note || ""); };
   const saveLifeEvent = (event: FormEvent) => {
     event.preventDefault();
@@ -1093,31 +1093,81 @@ function SleepTrend() {
 
 
 function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions, flash }: { presets: StudyTaskPreset[]; setPresets: Dispatch<SetStateAction<StudyTaskPreset[]>>; tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; moduleOptions: string[]; flash: (x: string) => void }) {
-  const [title, setTitle] = useState(""), [subject, setSubject] = useState(moduleOptions[0] || "资料分析"), [totalLessons, setTotalLessons] = useState(12), [editingId, setEditingId] = useState<number | null>(null), [historyCompleted, setHistoryCompleted] = useState<number[]>([]);
+  const [title, setTitle] = useState(""), [subject, setSubject] = useState(moduleOptions[0] || "资料分析"), [totalLessons, setTotalLessons] = useState(12), [editingId, setEditingId] = useState<number | null>(null);
+  const [historySelection, setHistorySelection] = useState<number[]>([]), [historyDate, setHistoryDate] = useState(localISO());
+  const [historyDates, setHistoryDates] = useState<Record<string, string>>({}), [legacyUndated, setLegacyUndated] = useState<number[]>([]);
   useEffect(() => { if (moduleOptions.length && !moduleOptions.includes(subject)) setSubject(moduleOptions[0]); }, [moduleOptions, subject]);
-  useEffect(() => { setHistoryCompleted(current => normalizedLessonNumbers(current, totalLessons)); }, [totalLessons]);
+  useEffect(() => {
+    setHistorySelection(current => normalizedLessonNumbers(current, totalLessons));
+    setLegacyUndated(current => normalizedLessonNumbers(current, totalLessons));
+    setHistoryDates(current => Object.fromEntries(Object.entries(current).filter(([lesson]) => Number(lesson) >= 1 && Number(lesson) <= totalLessons)));
+  }, [totalLessons]);
   const ordered = [...presets].sort((a, b) => (a.order ?? a.id) - (b.order ?? b.id));
-  const resetEditor = () => { setEditingId(null); setTitle(""); setTotalLessons(12); setHistoryCompleted([]); };
+  const resetEditor = () => { setEditingId(null); setTitle(""); setTotalLessons(12); setHistorySelection([]); setHistoryDates({}); setLegacyUndated([]); setHistoryDate(localISO()); };
+  const datedLessons = () => normalizedLessonNumbers(Object.keys(historyDates).map(Number), totalLessons);
+  const historyGroups = () => {
+    const groups = new Map<string, number[]>();
+    (Object.entries(historyDates) as [string, string][]).forEach(([lesson, date]) => { if (!date) return; const list = groups.get(date) || []; list.push(Number(lesson)); groups.set(date, list); });
+    return Array.from(groups.entries()).map(([date, lessons]) => ({ date, lessons: normalizedLessonNumbers(lessons, totalLessons) })).sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const toggleHistoryLesson = (lesson: number) => setHistorySelection(current => current.includes(lesson) ? current.filter(value => value !== lesson) : [...current, lesson].sort((a, b) => a - b));
+  const assignHistoryDate = () => {
+    if (!historySelection.length) { flash("请先选择这一天完成的课时"); return; }
+    if (!/^20\\d{2}-\\d{2}-\\d{2}$/.test(historyDate)) { flash("请选择有效完成日期"); return; }
+    setHistoryDates(current => { const next = { ...current }; historySelection.forEach(lesson => { next[String(lesson)] = historyDate; }); return next; });
+    setLegacyUndated(current => current.filter(lesson => !historySelection.includes(lesson)));
+    setHistorySelection([]);
+    flash(`已记录 ${formatShortDate(historyDate)} 完成的课时`);
+  };
+  const removeHistoryGroup = (date: string) => setHistoryDates(current => Object.fromEntries(Object.entries(current).filter(([, value]) => value !== date)));
+  const clearLessonCompletion = (lesson: number) => {
+    setHistoryDates(current => { const next = { ...current }; delete next[String(lesson)]; return next; });
+    setLegacyUndated(current => current.filter(value => value !== lesson));
+    setHistorySelection(current => current.filter(value => value !== lesson));
+  };
+  const syncHistoricalCalendarTasks = (presetId: number, presetTitle: string, presetSubject: string, dates: Record<string, string>) => {
+    const groups = new Map<string, number[]>();
+    (Object.entries(dates) as [string, string][]).forEach(([lesson, date]) => { if (!date) return; const list = groups.get(date) || []; list.push(Number(lesson)); groups.set(date, list); });
+    setTasks(current => {
+      const preserved = current.filter(task => !(task.presetId === presetId && task.historyPresetRecord));
+      const now = Date.now();
+      const historical = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([date, lessons], index) => {
+        const cleanLessons = normalizedLessonNumbers(lessons, totalLessons);
+        return { id: now + index, title: `${presetTitle} 第${formatLessonSelection(cleanLessons)}课`, subject: presetSubject, minutes: 0, done: true, date, presetId, lessonNumbers: cleanLessons, historyPresetRecord: true } as Task;
+      });
+      return [...preserved, ...historical];
+    });
+  };
   const savePreset = (event: FormEvent) => {
     event.preventDefault();
     const clean = title.trim(), total = Math.max(1, Math.round(totalLessons));
     if (!clean) { flash("请填写学习任务名称"); return; }
-    const completedLessons = normalizedLessonNumbers(historyCompleted, total);
+    const dated = normalizedLessonNumbers(Object.keys(historyDates).map(Number), total);
+    const completedLessons = normalizedLessonNumbers([...legacyUndated, ...dated], total);
     if (editingId !== null) {
-      setPresets(current => current.map(item => item.id === editingId ? { ...item, title: clean, subject, totalLessons: total, completedLessons } : item));
-      resetEditor(); flash("学习任务与历史进度已更新");
+      setPresets(current => current.map(item => item.id === editingId ? { ...item, title: clean, subject, totalLessons: total, completedLessons, lessonCompletionDates: { ...historyDates } } : item));
+      syncHistoricalCalendarTasks(editingId, clean, subject, historyDates);
+      resetEditor(); flash("学习任务与带日期的历史完成记录已更新，并同步到月历");
     } else {
       if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
+      const id = Date.now();
       const nextOrder = presets.reduce((max, item) => Math.max(max, item.order ?? 0), 0) + 10;
-      setPresets(current => [...current, { id: Date.now(), title: clean, subject, totalLessons: total, order: nextOrder, completedLessons }]);
-      setTitle(""); setTotalLessons(12); setHistoryCompleted([]); flash("学习任务已加入预设库");
+      setPresets(current => [...current, { id, title: clean, subject, totalLessons: total, order: nextOrder, completedLessons, lessonCompletionDates: { ...historyDates } }]);
+      syncHistoricalCalendarTasks(id, clean, subject, historyDates);
+      setTitle(""); setTotalLessons(12); setHistorySelection([]); setHistoryDates({}); setLegacyUndated([]); flash("学习任务已加入预设库，历史完成记录已同步月历");
     }
   };
-  const editPreset = (preset: StudyTaskPreset) => { setEditingId(preset.id); setTitle(preset.title); setSubject(preset.subject); setTotalLessons(preset.totalLessons); setHistoryCompleted(normalizedLessonNumbers(preset.completedLessons, preset.totalLessons)); };
+  const editPreset = (preset: StudyTaskPreset) => {
+    const dates = { ...(preset.lessonCompletionDates || {}) };
+    const dated = new Set(Object.keys(dates).map(Number));
+    setEditingId(preset.id); setTitle(preset.title); setSubject(preset.subject); setTotalLessons(preset.totalLessons); setHistoryDates(dates); setHistorySelection([]);
+    setLegacyUndated(normalizedLessonNumbers(preset.completedLessons, preset.totalLessons).filter(lesson => !dated.has(lesson)));
+    setHistoryDate(localISO());
+  };
   const deletePreset = (preset: StudyTaskPreset) => {
-    if (!window.confirm(`确定删除预设任务“${preset.title}”吗？\n已经加入月度计划的任务不会被删除。`)) return;
+    if (!window.confirm(`确定删除预设任务“${preset.title}”吗？\\n已经加入月度计划的任务不会被删除。`)) return;
     setPresets(current => current.filter(item => item.id !== preset.id));
-    setTasks(current => current.map(task => task.presetId === preset.id ? { ...task, presetId: undefined, lessonNumber: undefined, lessonNumbers: undefined } : task));
+    setTasks(current => current.map(task => task.presetId === preset.id ? { ...task, presetId: undefined, lessonNumber: undefined, lessonNumbers: undefined, historyPresetRecord: undefined } : task));
     if (editingId === preset.id) resetEditor();
     flash("预设任务已删除，已有单日任务保留");
   };
@@ -1125,12 +1175,14 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     if (sourceId === targetId) return;
     setPresets(current => { const sorted = [...current].sort((a, b) => (a.order ?? a.id) - (b.order ?? b.id)); const from = sorted.findIndex(x => x.id === sourceId), to = sorted.findIndex(x => x.id === targetId); if (from < 0 || to < 0) return current; const [moved] = sorted.splice(from, 1); sorted.splice(to, 0, moved); return sorted.map((item, index) => ({ ...item, order: (index + 1) * 10 })); });
   };
-  const toggleHistoryLesson = (lesson: number) => setHistoryCompleted(current => current.includes(lesson) ? current.filter(value => value !== lesson) : [...current, lesson].sort((a, b) => a - b));
   return <div className="page-stack task-library-page">
-    <section className="page-intro"><div><p className="eyebrow">STUDY TASK LIBRARY</p><h2>学习任务管理</h2><p>先建立课程或长期项目；以前已经学过的课时也可以在这里补录进度，不需要伪造过去的每日计划。</p></div></section>
+    <section className="page-intro"><div><p className="eyebrow">STUDY TASK LIBRARY</p><h2>学习任务管理</h2><p>长期课程可以同时管理未来安排和过去完成记录；历史记录可填写具体日期，并同步显示到对应日期的月历。</p></div></section>
     <section className="task-library-layout">
-      <form className="panel form-card task-preset-form" onSubmit={savePreset}><PanelTitle title={editingId === null ? "新增预设任务" : "修改预设任务"} /><label>任务名称<input value={title} onChange={e => setTitle(e.target.value)} placeholder="例如：张弓十二箭" /></label><div className="form-grid"><label>学习模块<select value={subject} onChange={e => setSubject(e.target.value)}>{moduleOptions.map(item => <option key={item}>{item}</option>)}</select></label><label>总课时<input type="number" min="1" max="999" value={totalLessons} onChange={e => setTotalLessons(Math.max(1, Number(e.target.value) || 1))} /></label></div><div className="preset-history-editor"><div className="preset-history-head"><div><strong>以前已经完成的课时</strong><small>用于补录历史进度；不会生成月计划或学习时长记录。</small></div><div><button type="button" onClick={() => setHistoryCompleted(Array.from({ length: totalLessons }, (_, index) => index + 1))}>全部完成</button><button type="button" onClick={() => setHistoryCompleted([])}>清空</button></div></div><div className="lesson-chip-grid">{Array.from({ length: totalLessons }, (_, index) => index + 1).map(lesson => <button type="button" key={lesson} className={historyCompleted.includes(lesson) ? "selected history" : ""} onClick={() => toggleHistoryLesson(lesson)}>{lesson}</button>)}</div><p>已补录 <b>{historyCompleted.length}</b> / {totalLessons} 课</p></div><button className="primary-button wide">{editingId === null ? "加入任务库" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button wide cancel-edit" onClick={resetEditor}>取消修改</button>}</form>
-      <section className="panel task-preset-list-panel"><div className="panel-title"><div><h2>预设任务</h2><p>拖动左侧“≡”调整顺序；完成进度=历史补录课时+之后在月计划中实际勾选完成的课时。</p></div><span>{ordered.length} 项</span></div>{ordered.length ? <div className="task-preset-list">{ordered.map(preset => { const linked = tasks.filter(task => task.presetId === preset.id); const scheduledLessons = new Set(linked.flatMap(task => taskLessonNumbers(task))); const completedLessons = new Set([...normalizedLessonNumbers(preset.completedLessons, preset.totalLessons), ...linked.filter(task => task.done).flatMap(task => taskLessonNumbers(task))]); const percent = preset.totalLessons ? Math.min(100, Math.round(completedLessons.size / preset.totalLessons * 100)) : 0; return <article className="task-preset-card" key={preset.id} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); movePreset(Number(event.dataTransfer.getData("text/plain")), preset.id); }}><i className="task-preset-drag" draggable title="拖动排序" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(preset.id)); }}>≡</i><div className="task-preset-main"><div><strong>{preset.title}</strong><span>{preset.subject}</span></div><p>总课时 {preset.totalLessons} · 已安排 {Math.min(scheduledLessons.size, preset.totalLessons)} · 已完成 {Math.min(completedLessons.size, preset.totalLessons)}{(preset.completedLessons || []).length ? ` · 历史补录 ${(preset.completedLessons || []).length}` : ""}</p><div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div><div className="task-preset-actions"><button onClick={() => editPreset(preset)}>修改</button><button onClick={() => deletePreset(preset)}>删除</button></div></article>; })}</div> : <div className="all-scheduled">还没有预设学习任务。可以先添加“张弓十二箭 / 言语理解 / 12课时”这类长期任务。</div>}</section>
+      <form className="panel form-card task-preset-form" onSubmit={savePreset}><PanelTitle title={editingId === null ? "新增预设任务" : "修改预设任务"} /><label>任务名称<input value={title} onChange={e => setTitle(e.target.value)} placeholder="例如：张弓十二箭" /></label><div className="form-grid"><label>学习模块<select value={subject} onChange={e => setSubject(e.target.value)}>{moduleOptions.map(item => <option key={item}>{item}</option>)}</select></label><label>总课时<input type="number" min="1" max="999" value={totalLessons} onChange={e => setTotalLessons(Math.max(1, Number(e.target.value) || 1))} /></label></div>
+        <div className="preset-history-editor dated-history-editor"><div className="preset-history-head"><div><strong>历史完成记录</strong><small>选择日期和当天看完的课时。保存预设任务后，会作为已完成任务显示在对应日期月历，但不会增加学习时长。</small></div></div><div className="history-date-toolbar"><label>完成日期<input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} /></label><button type="button" className="soft-button" onClick={assignHistoryDate}>＋ 记录所选课时到这一天</button><button type="button" onClick={() => setHistorySelection(Array.from({ length: totalLessons }, (_, index) => index + 1))}>全选</button><button type="button" onClick={() => setHistorySelection([])}>清空选择</button></div><div className="lesson-chip-grid">{Array.from({ length: totalLessons }, (_, index) => index + 1).map(lesson => { const date = historyDates[String(lesson)]; const undated = legacyUndated.includes(lesson); return <button type="button" key={lesson} className={`${historySelection.includes(lesson) ? "selected" : ""} ${date ? "history-dated" : undated ? "history-undated" : ""}`} onClick={() => toggleHistoryLesson(lesson)} title={date ? `第${lesson}课 · ${date}已完成` : undated ? `第${lesson}课 · 旧版完成记录尚未设置日期` : `第${lesson}课`}>{lesson}{date ? <small>{formatShortDate(date)}</small> : undated ? <small>待补日期</small> : null}</button>; })}</div>{legacyUndated.length ? <div className="legacy-history-note"><span>旧版未分日期完成：第{formatLessonSelection(legacyUndated)}课。选择这些课时并指定日期，即可补到月历。</span><button type="button" onClick={() => setLegacyUndated([])}>取消这些完成状态</button></div> : null}<div className="history-record-list">{historyGroups().map(group => <article key={group.date}><div><strong>{formatShortDate(group.date)}</strong><span>第{formatLessonSelection(group.lessons)}课</span></div><button type="button" onClick={() => removeHistoryGroup(group.date)}>删除这天记录</button></article>)}</div><p>已记录具体日期 <b>{datedLessons().length}</b> 课{legacyUndated.length ? ` · 另有 ${legacyUndated.length} 课待补日期` : ""}</p></div>
+        <button className="primary-button wide">{editingId === null ? "加入任务库" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button wide cancel-edit" onClick={resetEditor}>取消修改</button>}
+      </form>
+      <section className="panel task-preset-list-panel"><div className="panel-title"><div><h2>预设任务</h2><p>拖动左侧“≡”调整顺序；历史完成记录有日期时会同步到月历，未来任务仍由月计划正常安排。</p></div><span>{ordered.length} 项</span></div>{ordered.length ? <div className="task-preset-list">{ordered.map(preset => { const linked = tasks.filter(task => task.presetId === preset.id); const scheduledLessons = new Set(linked.filter(task => !task.historyPresetRecord).flatMap(task => taskLessonNumbers(task))); const datedHistory = normalizedLessonNumbers(Object.keys(preset.lessonCompletionDates || {}).map(Number), preset.totalLessons); const completedLessons = new Set([...normalizedLessonNumbers(preset.completedLessons, preset.totalLessons), ...datedHistory, ...linked.filter(task => task.done).flatMap(task => taskLessonNumbers(task))]); const percent = preset.totalLessons ? Math.min(100, Math.round(completedLessons.size / preset.totalLessons * 100)) : 0; const dateGroups = (Object.entries(preset.lessonCompletionDates || {}) as [string, string][]).reduce<Record<string, number[]>>((acc, [lesson, date]) => { (acc[date] ||= []).push(Number(lesson)); return acc; }, {}); return <article className="task-preset-card" key={preset.id} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); movePreset(Number(event.dataTransfer.getData("text/plain")), preset.id); }}><i className="task-preset-drag" draggable title="拖动排序" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(preset.id)); }}>≡</i><div className="task-preset-main"><div><strong>{preset.title}</strong><span>{preset.subject}</span></div><p>总课时 {preset.totalLessons} · 已安排 {Math.min(scheduledLessons.size, preset.totalLessons)} · 已完成 {Math.min(completedLessons.size, preset.totalLessons)}</p>{Object.keys(dateGroups).length ? <div className="task-preset-history-summary">{Object.entries(dateGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([date, lessons]) => <span key={date}>{formatShortDate(date)} 第{formatLessonSelection(normalizedLessonNumbers(lessons, preset.totalLessons))}课</span>)}</div> : null}<div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div><div className="task-preset-actions"><button onClick={() => editPreset(preset)}>修改</button><button onClick={() => deletePreset(preset)}>删除</button></div></article>; })}</div> : <div className="all-scheduled">还没有预设学习任务。可以先添加“张弓十二箭 / 言语理解 / 12课时”这类长期任务。</div>}</section>
     </section>
   </div>;
 }
