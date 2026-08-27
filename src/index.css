@@ -634,3 +634,92 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .month-side .single-task-slot-editor .timeline-slot-row{grid-template-columns:38px minmax(0,1fr) minmax(0,1fr)!important;gap:6px!important}.month-side .single-task-slot-editor .timeline-slot-row label{min-width:0}.month-side .single-task-slot-editor .timeline-slot-row input[type="time"]{width:100%!important;min-width:0!important;padding:0 3px!important;font-size:11px!important;font-variant-numeric:tabular-nums}.month-side .single-task-slot-editor input[type="time"]::-webkit-datetime-edit{padding:0}.month-side .single-task-slot-editor input[type="time"]::-webkit-calendar-picker-indicator{width:14px;height:14px;padding:0;margin:0 1px 0 2px}.month-side .single-task-slot-editor .timeline-slot-row>b{font-size:9px!important}
 @media(max-width:1180px){.history-date-toolbar{grid-template-columns:1fr 1.4fr}.history-date-toolbar>button:nth-last-child(-n+2){grid-row:2}.month-side .single-task-slot-editor .timeline-slot-row{grid-template-columns:38px minmax(0,1fr) minmax(0,1fr)!important}}
 @media(max-width:760px){.history-date-toolbar{grid-template-columns:1fr}.history-date-toolbar>*{grid-row:auto!important}.legacy-history-note{align-items:flex-start;flex-direction:column}.month-side .single-task-slot-editor .timeline-slot-row{grid-template-columns:1fr 1fr!important}.month-side .single-task-slot-editor .timeline-slot-row>b{grid-column:1/-1}}
+
+/* v38: custom timeline start hour + readable node cards for actual study records under 20 minutes */
+.timeline-panel-tools{
+  grid-template-columns:auto auto minmax(150px,1fr) auto!important;
+}
+.timeline-start-control{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+  color:var(--muted);
+  font-size:10px;
+  white-space:nowrap;
+}
+.timeline-start-control span{font-size:10px;color:var(--muted)}
+.timeline-start-control select{
+  height:36px;
+  min-width:82px;
+  padding:0 26px 0 10px;
+  border:1px solid color-mix(in srgb,var(--primary) 22%,var(--line));
+  border-radius:999px;
+  background:color-mix(in srgb,var(--primary) 5%,var(--panel));
+  color:var(--ink);
+  font-size:10px;
+  font-variant-numeric:tabular-nums;
+  outline:none;
+}
+.timeline-start-control select:focus{border-color:var(--primary)}
+.timeline-range-note{
+  width:min(880px,100%);
+  margin:10px auto 0;
+  color:var(--muted);
+  font-size:9px;
+  text-align:right;
+}
+.actual-side article.short-actual-study{
+  min-height:36px!important;
+  height:36px;
+  z-index:5;
+  padding:6px 31px 6px 8px!important;
+  border-radius:11px!important;
+  overflow:hidden;
+  background:color-mix(in srgb,var(--accent) 17%,var(--panel));
+  box-shadow:0 5px 12px color-mix(in srgb,var(--accent) 12%,transparent),inset -3px 0 color-mix(in srgb,var(--accent) 55%,transparent);
+}
+.actual-side article.short-actual-study .timeline-inline{
+  grid-template-columns:max-content minmax(0,1fr) max-content!important;
+  column-gap:6px!important;
+}
+.actual-side article.short-actual-study .timeline-time{
+  display:block!important;
+  font-size:8px!important;
+  line-height:1!important;
+  white-space:nowrap;
+}
+.actual-side article.short-actual-study .timeline-inline strong{
+  display:block!important;
+  min-width:0;
+  font-size:10px!important;
+  line-height:1.05!important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.actual-side article.short-actual-study .timeline-inline small{
+  display:block!important;
+  max-width:none!important;
+  padding:3px 5px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--accent) 12%,var(--page));
+  color:color-mix(in srgb,var(--accent) 78%,var(--ink));
+  font-size:8px!important;
+  font-weight:700;
+  line-height:1!important;
+  white-space:nowrap;
+}
+.actual-side article.short-actual-study .timeline-edit-trigger{
+  width:20px;
+  height:20px;
+  right:5px;
+}
+@media(max-width:760px){
+  .timeline-panel-tools{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  .timeline-start-control{justify-content:flex-start}
+  .timeline-panel-tools>span{justify-self:end;align-self:center}
+  .timeline-panel-tools>input{grid-column:1/-1}
+  .timeline-reset{grid-column:1/-1;justify-self:end}
+  .timeline-range-note{text-align:left}
+}
