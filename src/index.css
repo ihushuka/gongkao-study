@@ -723,3 +723,43 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
   .timeline-reset{grid-column:1/-1;justify-self:end}
   .timeline-range-note{text-align:left}
 }
+
+/* v39 · preset progress scheduling and deadline overview */
+.task-deadline-overview{display:flex;flex-direction:column;gap:12px}
+.task-deadline-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.task-deadline-grid article{display:flex;flex-direction:column;gap:6px;padding:12px 13px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--primary) 3%,var(--panel));min-width:0}
+.task-deadline-grid article>div{display:flex;align-items:center;gap:8px;min-width:0}
+.task-deadline-grid article strong{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-deadline-grid article span{font-size:8px;padding:3px 6px;border-radius:999px;background:color-mix(in srgb,var(--primary) 8%,var(--page));color:var(--primary-deep);white-space:nowrap}
+.task-deadline-grid article>b{font-size:10px;color:var(--primary-deep)}
+.task-deadline-grid article small{font-size:8px;color:var(--muted);line-height:1.5}
+.task-deadline-empty{margin:0;color:var(--muted);font-size:9px}
+.preset-schedule-planner{display:flex;flex-direction:column;gap:12px;margin:4px 0 14px;padding:14px;border:1px solid color-mix(in srgb,var(--primary) 24%,var(--line));border-radius:15px;background:color-mix(in srgb,var(--primary) 5%,var(--panel))}
+.preset-schedule-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.preset-schedule-head h3{margin:2px 0 3px;font-size:14px;color:var(--ink)}
+.preset-schedule-head span{font-size:8px;color:var(--muted)}
+.preset-schedule-head>button{width:30px;height:30px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);cursor:pointer}
+.preset-schedule-controls{display:grid;grid-template-columns:1.2fr .8fr 1fr .9fr 1fr;gap:8px;align-items:end}
+.preset-schedule-controls label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:8px;color:var(--muted)}
+.preset-schedule-controls input,.preset-schedule-controls select{width:100%;min-width:0;height:38px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:0 10px;font-size:9px}
+.preset-schedule-controls small{font-size:7px;line-height:1.3;color:var(--muted)}
+.preset-weekday-picker{display:flex;flex-wrap:wrap;gap:6px}
+.preset-weekday-picker button{height:32px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);font-size:8px;font-weight:700;cursor:pointer}
+.preset-weekday-picker button.active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 12%,var(--panel));color:var(--primary-deep)}
+.preset-schedule-preview{display:flex;flex-direction:column;gap:8px;padding:10px 11px;border-radius:12px;background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid color-mix(in srgb,var(--accent) 22%,var(--line))}
+.preset-schedule-preview>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.preset-schedule-preview strong{font-size:9px;color:var(--ink)}
+.preset-schedule-preview span{font-size:8px;color:var(--muted)}
+.preset-schedule-preview-list{display:flex;flex-wrap:wrap;gap:5px}
+.preset-schedule-preview-list span{padding:4px 7px;border-radius:8px;background:var(--panel);border:1px solid var(--line);color:var(--primary-deep)}
+.preset-schedule-actions{display:flex;gap:8px;flex-wrap:wrap}
+.preset-schedule-actions button{min-height:36px}
+.task-preset-card.planning{border-color:color-mix(in srgb,var(--primary) 46%,var(--line));box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 8%,transparent)}
+.task-preset-deadline{display:flex!important;align-items:center!important;gap:6px!important;flex-wrap:wrap}
+.task-preset-deadline b{font-size:9px;color:var(--primary-deep)}
+.task-preset-deadline span{font-size:7px!important;padding:3px 6px!important;background:color-mix(in srgb,var(--accent) 10%,var(--panel))!important}
+.task-preset-actions .schedule{border-color:color-mix(in srgb,var(--primary) 30%,var(--line));background:color-mix(in srgb,var(--primary) 8%,var(--panel));color:var(--primary-deep)}
+.calendar-task.auto-preset-plan{border-left:2px solid color-mix(in srgb,var(--primary) 55%,var(--line));padding-left:3px}
+@media(max-width:1180px){.preset-schedule-controls{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.preset-schedule-controls{grid-template-columns:1fr 1fr}.task-deadline-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.preset-schedule-controls,.task-deadline-grid{grid-template-columns:1fr}.preset-schedule-preview>div:first-child{align-items:flex-start;flex-direction:column}}
