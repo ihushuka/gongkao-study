@@ -596,3 +596,27 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
   .sleep-summary-grid{grid-template-columns:1fr}
   .sleep-history-head,.sleep-history-row{font-size:8px}
 }
+
+/* v35: reusable study-task library + preset lesson picker in monthly plan */
+.task-library-layout{display:grid;grid-template-columns:minmax(300px,.78fr) minmax(0,1.65fr);gap:var(--ui-layout-gap);align-items:start}
+.task-preset-form{position:sticky;top:82px}
+.task-preset-list-panel{min-width:0}
+.task-preset-list{display:flex;flex-direction:column;gap:10px}
+.task-preset-card{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--primary) 3%,var(--panel));transition:border-color .16s ease,background .16s ease}
+.task-preset-card:hover{border-color:color-mix(in srgb,var(--primary) 30%,var(--line));background:color-mix(in srgb,var(--primary) 5%,var(--panel))}
+.task-preset-drag{width:32px;height:42px;display:grid;place-items:center;border-right:1px solid var(--line);color:var(--muted);font-style:normal;font-weight:800;cursor:grab;user-select:none}
+.task-preset-drag:active{cursor:grabbing}
+.task-preset-main{min-width:0;display:flex;flex-direction:column;gap:7px}
+.task-preset-main>div{display:flex;align-items:center;gap:9px;min-width:0}
+.task-preset-main strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-preset-main>div span{padding:4px 7px;border-radius:999px;background:color-mix(in srgb,var(--primary) 9%,var(--page));color:var(--primary-deep);font-size:9px;white-space:nowrap}
+.task-preset-main p{margin:0;font-size:9px;color:var(--muted)}
+.task-preset-actions{display:flex;align-items:center;gap:6px}
+.task-preset-actions button{height:32px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);font-size:9px;font-weight:700;cursor:pointer}
+.task-preset-actions button:hover{border-color:color-mix(in srgb,var(--primary) 30%,var(--line));color:var(--primary-deep)}
+.preset-task-picker{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,.8fr);gap:10px;align-items:end;padding:12px;margin:0 0 12px;border:1px solid color-mix(in srgb,var(--primary) 15%,var(--line));border-radius:13px;background:color-mix(in srgb,var(--primary) 3%,var(--page))}
+.preset-task-picker label{margin:0}
+.preset-task-picker p{grid-column:2;margin:0 0 8px;font-size:9px;line-height:1.55;color:var(--muted)}
+.preset-task-picker small{display:block;margin-top:5px;font-size:8px;color:var(--muted);line-height:1.45}
+@media(max-width:980px){.task-library-layout{grid-template-columns:1fr}.task-preset-form{position:static}.preset-task-picker{grid-template-columns:1fr}.preset-task-picker p{grid-column:1}}
+@media(max-width:620px){.task-preset-card{grid-template-columns:30px minmax(0,1fr)}.task-preset-actions{grid-column:2;justify-self:start}.task-preset-main>div{align-items:flex-start;flex-direction:column;gap:5px}}
