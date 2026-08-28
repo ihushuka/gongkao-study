@@ -993,3 +993,7 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
   .timeline-record-list article>button,.timeline-record-list article>.record-list-running{grid-column:2/4;justify-self:end}
   .dense-detail-row{grid-template-columns:92px minmax(0,1fr) max-content 24px}
 }
+
+/* v43: practice records can link directly to the study-task library */
+.practice-linked-mark{display:block;width:max-content;margin-top:3px;padding:2px 6px;border-radius:999px;background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--primary);font-size:9px;font-weight:700;line-height:1.35}
+.practice-form select:disabled{opacity:.78;cursor:not-allowed;background:color-mix(in srgb,var(--page) 86%,var(--panel))}
