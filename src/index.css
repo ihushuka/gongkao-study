@@ -1217,3 +1217,31 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .timeband-chart.grouped .timeband-pair i.today{background:var(--primary)}
 .timeband-chart.grouped .timeband-pair i.week{background:color-mix(in srgb,var(--accent) 66%,var(--primary))}
 @media(max-width:760px){.timeband-summary-grid{grid-template-columns:1fr 1fr}.timeband-summary-grid .timeband-frequent{grid-column:1/-1}.timeband-legend{justify-content:flex-start}}
+
+/* v49: custom task numbering + practice stats scope and draggable practice modules */
+.task-numbering-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.task-numbering-grid label small{display:block;margin-top:5px;color:var(--muted);font-size:9px;line-height:1.35}
+.task-numbering-preview{margin:-5px 0 15px;padding:9px 11px;border:1px dashed color-mix(in srgb,var(--primary) 26%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--primary) 4%,var(--panel));color:var(--muted);font-size:10px;line-height:1.5}
+.task-numbering-preview b{color:var(--primary-deep)}
+
+.practice-page{--practice-module-gap:18px}
+.practice-module-sort-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 14px;border:1px dashed color-mix(in srgb,var(--primary) 30%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--primary) 4%,var(--panel))}
+.practice-module-sort-toolbar>div{display:flex;flex-direction:column;gap:3px}.practice-module-sort-toolbar strong{font-size:11px}.practice-module-sort-toolbar span{font-size:9px;color:var(--muted)}
+.practice-module-sort-toolbar>button{height:32px;border:1px solid var(--line);border-radius:9px;padding:0 11px;background:var(--panel);color:var(--primary-deep);font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap}
+.practice-reorder-board{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--practice-module-gap);align-items:start}
+.practice-reorder-item{position:relative;min-width:0;padding-top:31px;transition:opacity .16s ease}
+.practice-reorder-sources,.practice-reorder-modules,.practice-reorder-accuracy,.practice-reorder-trend,.practice-reorder-details,.practice-reorder-record{grid-column:span 6}
+.practice-reorder-summary{grid-column:1/-1}
+.practice-reorder-item>.panel,.practice-reorder-item>form.panel,.practice-reorder-item>.practice-stat-summary{height:100%;margin:0}
+.practice-module-dragbar{position:absolute;left:0;right:0;top:0;height:27px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 3px;z-index:2}
+.practice-module-dragbar>button{height:24px;border:0;background:transparent;padding:0 5px;color:var(--muted);font-size:9px;font-weight:700;cursor:grab;white-space:nowrap}
+.practice-module-dragbar>button:active{cursor:grabbing;color:var(--primary)}
+.practice-module-dragbar>span{display:flex;gap:3px}.practice-module-dragbar>span button{width:25px;height:23px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--primary-deep);font-size:10px;cursor:pointer}
+.practice-module-dragbar>span button:disabled{opacity:.25;cursor:default}.practice-reorder-item:has(.practice-module-dragbar>button:active){opacity:.72}
+.practice-stat-summary{display:flex;flex-direction:column;gap:12px}
+.practice-stat-scope-panel{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:15px;background:color-mix(in srgb,var(--primary) 4%,var(--panel))}
+.practice-stat-scope-panel>div:first-child{display:flex;flex-direction:column;gap:3px}.practice-stat-scope-panel strong{font-size:11px}.practice-stat-scope-panel span{font-size:9px;color:var(--muted)}
+.practice-summary-metrics{margin:0}.practice-stat-caption{margin:3px 0 0;color:var(--muted);font-size:9px;font-weight:400}.practice-reorder-accuracy .panel-title>span{color:var(--muted);font-size:9px}
+
+@media(max-width:900px){.task-numbering-grid{grid-template-columns:1fr 1fr}.task-numbering-grid label:first-child{grid-column:1/-1}.practice-reorder-sources,.practice-reorder-modules,.practice-reorder-accuracy,.practice-reorder-trend,.practice-reorder-details,.practice-reorder-record{grid-column:1/-1}}
+@media(max-width:760px){.task-numbering-grid{grid-template-columns:1fr}.task-numbering-grid label:first-child{grid-column:auto}.practice-module-sort-toolbar{align-items:flex-start;flex-direction:column}.practice-reorder-board{grid-template-columns:1fr}.practice-reorder-item{grid-column:1!important}.practice-module-dragbar>button{max-width:calc(100% - 70px);overflow:hidden;text-overflow:ellipsis}.practice-stat-scope-panel{align-items:flex-start;flex-direction:column}}
