@@ -1262,12 +1262,12 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 /* v51: keep migration traces on the original calendar date */
 .calendar-task.migration-trace{align-items:center;padding:3px 4px;border:1px dashed transparent;min-height:22px;transition:background .18s ease,border-color .18s ease,color .18s ease}
 .calendar-task.migration-trace:hover{filter:saturate(1.02)}
-.calendar-task.migration-trace.migration-pending{background:color-mix(in srgb,#d95f5f 18%,transparent);border-color:color-mix(in srgb,#c94d4d 46%,var(--line))}
-.calendar-task.migration-trace.migration-resolved{background:color-mix(in srgb,var(--primary) 13%,transparent);border-color:color-mix(in srgb,var(--primary) 44%,var(--line))}
+.calendar-task.migration-trace.migration-pending{background:linear-gradient(90deg,color-mix(in srgb,#d95f5f 18%,transparent) 0 var(--migration-fill,100%),transparent var(--migration-fill,100%) 100%);border-color:color-mix(in srgb,#c94d4d 46%,var(--line))}
+.calendar-task.migration-trace.migration-resolved{background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 13%,transparent) 0 var(--migration-fill,100%),transparent var(--migration-fill,100%) 100%);border-color:color-mix(in srgb,var(--primary) 44%,var(--line))}
 .calendar-task .migration-trace-main{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:center;gap:4px;min-width:0;flex:1}
 .calendar-task .migration-trace-main>i{display:grid;place-items:center;width:14px;height:14px;border-radius:50%;font-style:normal;font-size:9px;font-weight:800;color:#a94646;background:color-mix(in srgb,#fff 52%,transparent)}
 .calendar-task.migration-resolved .migration-trace-main>i{color:var(--primary-deep);background:color-mix(in srgb,var(--panel) 70%,transparent)}
-.calendar-task .migration-trace-main>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:1.35;font-weight:650;color:var(--ink)}
+.calendar-task .migration-trace-main>span{display:flex;min-width:0;overflow:hidden;flex-direction:column;gap:1px;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:1.25;font-weight:650;color:var(--ink)}.calendar-task .migration-trace-main>span>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8.5px;font-weight:600;color:var(--muted)}
 .calendar-task .migration-trace-main>em{font-style:normal;font-size:8px;line-height:1;white-space:nowrap;padding:3px 5px;border-radius:999px;font-weight:800;color:#a94646;background:color-mix(in srgb,#fff 55%,transparent)}
 .calendar-task.migration-resolved .migration-trace-main>em{color:var(--primary-deep);background:color-mix(in srgb,var(--panel) 72%,transparent)}
 .calendar-task.migration-trace>button{opacity:.32;margin:0}
