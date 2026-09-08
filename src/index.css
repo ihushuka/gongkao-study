@@ -1287,3 +1287,13 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .composite-schedule-all-subtasks>div{display:flex;flex-wrap:wrap;gap:5px}
 .composite-schedule-all-subtasks span{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:999px;background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--primary-deep);font-size:8px;font-weight:700}
 .composite-schedule-all-subtasks span small{font-size:7px;color:var(--muted);font-weight:500}
+
+/* v53.3 - composite tasks also use lesson numbering + per-lesson subtask progress */
+.composite-numbering-grid{margin-bottom:6px}
+.composite-content-head{margin-top:10px}
+.composite-progress-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.composite-progress-grid .progress-lesson{min-height:112px;align-items:flex-start}
+.composite-lesson-substatus{width:100%;display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.composite-lesson-substatus i{font-style:normal;font-size:7.5px;line-height:1.2;padding:3px 5px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--panel)}
+.composite-lesson-substatus i.scheduled{border-style:dashed;color:var(--primary-deep);background:color-mix(in srgb,var(--primary) 6%,var(--panel))}
+.composite-lesson-substatus i.done{border-style:solid;border-color:color-mix(in srgb,var(--primary) 30%,var(--line));color:var(--primary-deep);background:color-mix(in srgb,var(--primary) 13%,var(--panel))}
