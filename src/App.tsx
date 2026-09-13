@@ -2244,26 +2244,44 @@ function PracticeView({ practices, setPractices, flash, moduleOptions, setModule
 function PracticePaperAccuracyPanel({ moduleOptions, flash }: { moduleOptions: string[]; flash: (x: string) => void }) {
   const [papers, setPapers] = useStoredState<PracticePaper[]>("shore-practice-papers", []);
   const [questionDefaults, setQuestionDefaults] = useStoredState<Record<string, number>>("shore-practice-paper-defaults", {});
+  const [paperModules, setPaperModules] = useStoredState<string[]>("shore-practice-paper-modules", moduleOptions);
+  const [paperModulesMigrated, setPaperModulesMigrated] = useStoredState<boolean>("shore-practice-paper-modules-v1-migrated", false);
+  const [newPaperModule, setNewPaperModule] = useState("");
+  const [newPaperModuleTotal, setNewPaperModuleTotal] = useState("20");
   const [paperDate, setPaperDate] = useState(localISO());
   const [paperTitle, setPaperTitle] = useState("");
   const [editingPaperId, setEditingPaperId] = useState<number | null>(null);
-  const allPaperModules = Array.from(new Set([...moduleOptions, ...Object.keys(questionDefaults), ...papers.flatMap(item => item.modules.map(row => row.module))]));
+
+  useEffect(() => {
+    if (paperModulesMigrated) return;
+    const legacyModules = Array.from(new Set([...moduleOptions, ...Object.keys(questionDefaults), ...papers.flatMap(item => item.modules.map(row => row.module))].map(item => item.trim()).filter(Boolean)));
+    if (legacyModules.length) setPaperModules(current => Array.from(new Set([...current, ...legacyModules])));
+    setPaperModulesMigrated(true);
+  }, [paperModulesMigrated, moduleOptions.join("|"), Object.keys(questionDefaults).join("|"), papers.length]);
+
+  const normalizedPaperModules = Array.from(new Set(paperModules.map(item => item.trim()).filter(Boolean)));
+  const historicalPaperModules = Array.from(new Set(papers.flatMap(item => item.modules.map(row => row.module).filter(Boolean))));
+  const allPaperModules = Array.from(new Set([...normalizedPaperModules, ...historicalPaperModules]));
+  const editingPaper = editingPaperId === null ? null : papers.find(item => item.id === editingPaperId) || null;
+  const entryModules = Array.from(new Set([...normalizedPaperModules, ...(editingPaper?.modules.map(row => row.module) || [])]));
+
   const defaultTotalFor = (moduleName: string) => {
     const value = questionDefaults[moduleName];
     return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 20;
   };
-  const makeDefaultDraft = () => Object.fromEntries(allPaperModules.map(moduleName => [moduleName, { correct: "0", total: String(defaultTotalFor(moduleName)) }]));
+  const makeDefaultDraft = (modules = normalizedPaperModules) => Object.fromEntries(modules.map(moduleName => [moduleName, { correct: "0", total: String(defaultTotalFor(moduleName)) }]));
   const [paperDraft, setPaperDraft] = useState<Record<string, { correct: string; total: string }>>(() => Object.fromEntries(moduleOptions.map(moduleName => [moduleName, { correct: "0", total: String(Number.isFinite(questionDefaults[moduleName]) ? Math.max(0, Math.round(questionDefaults[moduleName])) : 20) }])));
+
   useEffect(() => {
     setPaperDraft(current => {
       const next = { ...current };
       let changed = false;
-      allPaperModules.forEach(moduleName => {
+      normalizedPaperModules.forEach(moduleName => {
         if (!next[moduleName]) { next[moduleName] = { correct: "0", total: String(defaultTotalFor(moduleName)) }; changed = true; }
       });
       return changed ? next : current;
     });
-  }, [moduleOptions.join("|"), papers.length]);
+  }, [normalizedPaperModules.join("|"), Object.entries(questionDefaults).map(([key, value]) => `${key}:${value}`).join("|")]);
 
   const paperRows = papers.slice().sort((a, b) => normalizedDate(b.date).localeCompare(normalizedDate(a.date)) || b.id - a.id);
   const paperTotals = papers.reduce((sum, paper) => {
@@ -2275,9 +2293,13 @@ function PracticePaperAccuracyPanel({ moduleOptions, flash }: { moduleOptions: s
     const rows = papers.flatMap(paper => paper.modules.filter(row => row.module === moduleName && row.total > 0));
     const correct = rows.reduce((sum, row) => sum + row.correct, 0), total = rows.reduce((sum, row) => sum + row.total, 0);
     return { module: moduleName, correct, total, papers: rows.length, accuracy: total ? Math.round(correct / total * 1000) / 10 : 0 };
-  }).filter(row => row.total > 0).sort((a, b) => b.total - a.total || a.module.localeCompare(b.module));
+  }).filter(row => row.total > 0).sort((a, b) => {
+    const ai = normalizedPaperModules.indexOf(a.module), bi = normalizedPaperModules.indexOf(b.module);
+    if (ai >= 0 || bi >= 0) return (ai < 0 ? 9999 : ai) - (bi < 0 ? 9999 : bi);
+    return b.total - a.total || a.module.localeCompare(b.module);
+  });
 
-  const draftTotals = allPaperModules.reduce((sum, moduleName) => {
+  const draftTotals = entryModules.reduce((sum, moduleName) => {
     const row = paperDraft[moduleName] || { correct: "0", total: "0" };
     const total = Math.max(0, Number(row.total) || 0), correct = Math.max(0, Number(row.correct) || 0);
     sum.total += total; sum.correct += Math.min(correct, total);
@@ -2285,17 +2307,68 @@ function PracticePaperAccuracyPanel({ moduleOptions, flash }: { moduleOptions: s
   }, { correct: 0, total: 0 });
 
   const setDraftValue = (moduleName: string, field: "correct" | "total", value: string) => setPaperDraft(current => ({ ...current, [moduleName]: { ...(current[moduleName] || { correct: "0", total: String(defaultTotalFor(moduleName)) }), [field]: value } }));
-  const applyDefaults = () => setPaperDraft(makeDefaultDraft());
+  const applyDefaults = () => setPaperDraft(current => ({ ...current, ...makeDefaultDraft() }));
   const resetPaperForm = () => { setEditingPaperId(null); setPaperDate(localISO()); setPaperTitle(""); setPaperDraft(makeDefaultDraft()); };
+
+  const renamePaperModule = (oldName: string, nextRaw: string) => {
+    const nextName = nextRaw.trim();
+    if (!nextName || nextName === oldName) return;
+    const known = new Set([...normalizedPaperModules, ...historicalPaperModules].filter(item => item !== oldName));
+    if (known.has(nextName)) { flash(`套卷模块“${nextName}”已存在`); return; }
+    setPaperModules(current => current.map(item => item === oldName ? nextName : item));
+    setQuestionDefaults(current => {
+      const next = { ...current };
+      const value = next[oldName];
+      delete next[oldName];
+      if (Number.isFinite(value)) next[nextName] = value;
+      return next;
+    });
+    setPaperDraft(current => {
+      const next = { ...current };
+      if (next[oldName]) { next[nextName] = next[oldName]; delete next[oldName]; }
+      return next;
+    });
+    setPapers(current => current.map(paper => ({ ...paper, modules: paper.modules.map(row => row.module === oldName ? { ...row, module: nextName } : row) })));
+    flash(`套卷模块已改为“${nextName}”`);
+  };
+
+  const deletePaperModule = (moduleName: string) => {
+    setPaperModules(current => current.filter(item => item !== moduleName));
+    setQuestionDefaults(current => { const next = { ...current }; delete next[moduleName]; return next; });
+    setPaperDraft(current => { const next = { ...current }; delete next[moduleName]; return next; });
+    flash(`已从默认套卷模块中移除“${moduleName}”；历史套卷记录不会删除`);
+  };
+
+  const addPaperModule = () => {
+    const moduleName = newPaperModule.trim();
+    if (!moduleName) { flash("请输入套卷模块名称"); return; }
+    if (new Set([...normalizedPaperModules, ...historicalPaperModules]).has(moduleName)) { flash(`套卷模块“${moduleName}”已存在`); return; }
+    const total = Math.max(0, Math.round(Number(newPaperModuleTotal) || 0));
+    setPaperModules(current => [...current, moduleName]);
+    setQuestionDefaults(current => ({ ...current, [moduleName]: total }));
+    setPaperDraft(current => ({ ...current, [moduleName]: { correct: "0", total: String(total) } }));
+    setNewPaperModule(""); setNewPaperModuleTotal("20");
+  };
+
+  const reorderPaperModule = (fromName: string, toName: string) => {
+    if (!fromName || fromName === toName) return;
+    setPaperModules(current => {
+      const from = current.indexOf(fromName), to = current.indexOf(toName);
+      if (from < 0 || to < 0) return current;
+      const next = [...current], [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next;
+    });
+  };
+
   const editPaper = (paper: PracticePaper) => {
-    const next = makeDefaultDraft();
+    const modules = Array.from(new Set([...normalizedPaperModules, ...paper.modules.map(row => row.module)]));
+    const next = makeDefaultDraft(modules);
     paper.modules.forEach(row => { next[row.module] = { correct: String(row.correct), total: String(row.total) }; });
     setEditingPaperId(paper.id); setPaperDate(normalizedDate(paper.date)); setPaperTitle(paper.title); setPaperDraft(next);
   };
   const savePaper = (event: FormEvent) => {
     event.preventDefault();
     const cleanTitle = paperTitle.trim() || `${formatShortDate(paperDate)} 套卷`;
-    const modules = allPaperModules.map(moduleName => {
+    const modules = entryModules.map(moduleName => {
       const row = paperDraft[moduleName] || { correct: "0", total: "0" };
       return { module: moduleName, correct: Math.max(0, Math.round(Number(row.correct) || 0)), total: Math.max(0, Math.round(Number(row.total) || 0)) };
     }).filter(row => row.total > 0);
@@ -2310,9 +2383,9 @@ function PracticePaperAccuracyPanel({ moduleOptions, flash }: { moduleOptions: s
   };
 
   return <div className="panel practice-paper-panel">
-    <div className="panel-title practice-paper-title"><div><h2>套卷正确率统计</h2><p>每套卷可按模块分别填写正确题数和题量；默认题量只需设置一次，每套卷仍可单独修改。</p></div><div className="practice-paper-overall"><strong>{overallAccuracy}%</strong><span>{papers.length} 套 · {paperTotals.total}题</span></div></div>
-    <div className="practice-paper-defaults"><div className="practice-paper-section-head"><div><strong>默认题量</strong><span>新建套卷时自动带出，可随时修改默认值。</span></div><button type="button" onClick={applyDefaults}>套用到当前套卷</button></div><div className="practice-paper-default-grid">{allPaperModules.map(moduleName => <label key={moduleName}><span>{moduleName}</span><input type="number" min="0" value={defaultTotalFor(moduleName)} onChange={e => setQuestionDefaults(current => ({ ...current, [moduleName]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))} /><small>题</small></label>)}</div></div>
-    <form className="practice-paper-form" onSubmit={savePaper}><div className="practice-paper-form-head"><div><strong>{editingPaperId === null ? "记录一套卷" : "修改套卷记录"}</strong><span>本卷总计 {draftTotals.total} 题 · 当前正确 {draftTotals.correct} 题 · {draftTotals.total ? Math.round(draftTotals.correct / draftTotals.total * 1000) / 10 : 0}%</span></div>{editingPaperId !== null && <button type="button" onClick={resetPaperForm}>取消修改</button>}</div><div className="practice-paper-meta"><label>日期<input type="date" value={paperDate} onChange={e => setPaperDate(e.target.value)} /></label><label>套卷名称<input value={paperTitle} onChange={e => setPaperTitle(e.target.value)} placeholder="例如：粉笔模考第32季" /></label></div><div className="practice-paper-entry-table"><div className="paper-entry-head"><span>模块</span><span>本卷题量</span><span>正确题数</span><span>正确率</span></div>{allPaperModules.map(moduleName => { const row = paperDraft[moduleName] || { correct: "0", total: "0" }; const rowTotal = Math.max(0, Number(row.total) || 0), rowCorrect = Math.max(0, Number(row.correct) || 0); return <div className="paper-entry-row" key={moduleName}><strong>{moduleName}</strong><input type="number" min="0" value={row.total} onChange={e => setDraftValue(moduleName, "total", e.target.value)} /><input type="number" min="0" value={row.correct} onChange={e => setDraftValue(moduleName, "correct", e.target.value)} /><b className={rowCorrect > rowTotal ? "invalid" : ""}>{rowTotal ? Math.round(rowCorrect / rowTotal * 1000) / 10 : 0}%</b></div>; })}</div><button className="primary-button wide">{editingPaperId === null ? "保存套卷成绩" : "保存修改"}</button></form>
+    <div className="panel-title practice-paper-title"><div><h2>套卷正确率统计</h2><p>每套卷可按模块分别填写正确题数和题量；默认题量和模块顺序可以独立管理。</p></div><div className="practice-paper-overall"><strong>{overallAccuracy}%</strong><span>{papers.length} 套 · {paperTotals.total}题</span></div></div>
+    <div className="practice-paper-defaults"><div className="practice-paper-section-head"><div><strong>默认题量与模块</strong><span>可改模块名称、默认题量，并拖动 ≡ 调整套卷模块顺序。</span></div><button type="button" onClick={applyDefaults}>套用到当前套卷</button></div><div className="practice-paper-default-grid">{normalizedPaperModules.map(moduleName => <div className="paper-default-row" key={moduleName} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={event => { event.preventDefault(); reorderPaperModule(event.dataTransfer.getData("text/plain"), moduleName); }}><i className="paper-module-drag" draggable title={`拖动“${moduleName}”调整顺序`} onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", moduleName); }}>≡</i><input className="paper-module-name-input" defaultValue={moduleName} key={`name-${moduleName}`} onBlur={event => { const value = event.currentTarget.value; renamePaperModule(moduleName, value); if (!value.trim() || value.trim() === moduleName || new Set([...normalizedPaperModules, ...historicalPaperModules].filter(item => item !== moduleName)).has(value.trim())) event.currentTarget.value = moduleName; }} aria-label={`${moduleName}模块名称`} /><input className="paper-number-input" type="number" min="0" value={defaultTotalFor(moduleName)} onChange={e => setQuestionDefaults(current => ({ ...current, [moduleName]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))} aria-label={`${moduleName}默认题量`} /><small>题</small><button className="paper-module-delete" type="button" onClick={() => deletePaperModule(moduleName)}>删除</button></div>)}</div><div className="paper-module-add"><input value={newPaperModule} onChange={event => setNewPaperModule(event.target.value)} placeholder="新增模块，如：政治理论" /><input className="paper-number-input" type="number" min="0" value={newPaperModuleTotal} onChange={event => setNewPaperModuleTotal(event.target.value)} aria-label="新增模块默认题量" /><span>题</span><button type="button" onClick={addPaperModule}>添加模块</button></div></div>
+    <form className="practice-paper-form" onSubmit={savePaper}><div className="practice-paper-form-head"><div><strong>{editingPaperId === null ? "记录一套卷" : "修改套卷记录"}</strong><span>本卷总计 {draftTotals.total} 题 · 当前正确 {draftTotals.correct} 题 · {draftTotals.total ? Math.round(draftTotals.correct / draftTotals.total * 1000) / 10 : 0}%</span></div>{editingPaperId !== null && <button type="button" onClick={resetPaperForm}>取消修改</button>}</div><div className="practice-paper-meta"><label>日期<input type="date" value={paperDate} onChange={e => setPaperDate(e.target.value)} /></label><label>套卷名称<input value={paperTitle} onChange={e => setPaperTitle(e.target.value)} placeholder="例如：粉笔模考第32季" /></label></div><div className="practice-paper-entry-table"><div className="paper-entry-head"><span>模块</span><span>本卷题量</span><span>正确题数</span><span>正确率</span></div>{entryModules.map(moduleName => { const row = paperDraft[moduleName] || { correct: "0", total: "0" }; const rowTotal = Math.max(0, Number(row.total) || 0), rowCorrect = Math.max(0, Number(row.correct) || 0); return <div className="paper-entry-row" key={moduleName}><strong>{moduleName}</strong><input className="paper-number-input" type="number" min="0" value={row.total} onChange={e => setDraftValue(moduleName, "total", e.target.value)} /><input className="paper-number-input" type="number" min="0" value={row.correct} onChange={e => setDraftValue(moduleName, "correct", e.target.value)} /><b className={rowCorrect > rowTotal ? "invalid" : ""}>{rowTotal ? Math.round(rowCorrect / rowTotal * 1000) / 10 : 0}%</b></div>; })}</div><button className="primary-button wide">{editingPaperId === null ? "保存套卷成绩" : "保存修改"}</button></form>
     <div className="practice-paper-stats"><div className="practice-paper-section-head"><div><strong>各模块累计正确率</strong><span>按所有已录入套卷累计正确题数 / 累计题数计算。</span></div></div>{paperModuleStats.length ? <div className="practice-paper-bars">{paperModuleStats.map(row => <div key={row.module}><span>{row.module}</span><div><i style={{ width: `${row.accuracy}%` }} /></div><strong>{row.accuracy}%</strong><small>{row.correct}/{row.total} · {row.papers}套</small></div>)}</div> : <Empty text="还没有套卷记录" />}</div>
     <div className="practice-paper-history"><div className="practice-paper-section-head"><div><strong>套卷记录</strong><span>每一套都保留各模块独立正确率。</span></div></div>{paperRows.length ? <div className="practice-paper-list">{paperRows.map(paper => { const total = paper.modules.reduce((sum, row) => sum + row.total, 0), correct = paper.modules.reduce((sum, row) => sum + row.correct, 0), accuracy = total ? Math.round(correct / total * 1000) / 10 : 0; return <article key={paper.id}><div className="paper-record-main"><div><span>{formatShortDate(paper.date)}</span><strong>{paper.title}</strong></div><b>{accuracy}%</b><small>{correct}/{total}</small><div className="row-actions"><button type="button" onClick={() => editPaper(paper)}>修改</button><button type="button" onClick={() => { setPapers(current => current.filter(item => item.id !== paper.id)); if (editingPaperId === paper.id) resetPaperForm(); }}>删除</button></div></div><div className="paper-record-modules">{paper.modules.map(row => <span key={`${paper.id}-${row.module}`}><b>{row.module}</b><em>{row.correct}/{row.total}</em><strong>{row.total ? Math.round(row.correct / row.total * 1000) / 10 : 0}%</strong></span>)}</div></article>; })}</div> : <Empty text="还没有录入套卷成绩" />}</div>
   </div>;
