@@ -1297,3 +1297,50 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .composite-lesson-substatus i{font-style:normal;font-size:7.5px;line-height:1.2;padding:3px 5px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--panel)}
 .composite-lesson-substatus i.scheduled{border-style:dashed;color:var(--primary-deep);background:color-mix(in srgb,var(--primary) 6%,var(--panel))}
 .composite-lesson-substatus i.done{border-style:solid;border-color:color-mix(in srgb,var(--primary) 30%,var(--line));color:var(--primary-deep);background:color-mix(in srgb,var(--primary) 13%,var(--panel))}
+
+
+/* v53.5: practice calendar drill-down + cumulative question volume */
+.practice-reorder-volume{grid-column:1/-1}
+.practice-volume-panel .panel-title{align-items:flex-start}
+.practice-volume-panel .panel-title p{margin:3px 0 0;color:var(--muted);font-size:9px;font-weight:400}
+.practice-volume-total{display:flex;align-items:baseline;gap:7px;padding:8px 11px;border-radius:12px;background:color-mix(in srgb,var(--primary) 8%,var(--panel));white-space:nowrap}
+.practice-volume-total strong{font:600 24px Georgia,serif;color:var(--primary-deep)}
+.practice-volume-total span{font-size:9px;color:var(--muted)}
+.practice-volume-bars{display:flex;flex-direction:column;gap:12px;margin-top:15px}
+.practice-volume-bars>div{display:grid;grid-template-columns:100px minmax(0,1fr) 58px 42px;align-items:center;gap:10px}
+.practice-volume-bars>div>span{font-size:10px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.practice-volume-bars>div>div{height:9px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--primary) 7%,var(--page))}
+.practice-volume-bars i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 72%,var(--panel)),var(--primary))}
+.practice-volume-bars strong{font-size:10px;text-align:right;color:var(--primary-deep)}
+.practice-volume-bars small{font-size:8.5px;color:var(--muted);text-align:right}
+.practice-detail-panel{overflow:hidden}
+.practice-calendar-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--primary) 3%,var(--panel))}
+.practice-calendar-toolbar label{display:flex;align-items:center;gap:8px;font-size:9px;color:var(--muted)}
+.practice-calendar-toolbar input[type="month"]{height:34px!important;min-width:145px;padding:0 9px!important;border-radius:9px!important}
+.practice-calendar-toolbar>button{height:32px;padding:0 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);font-size:9px;cursor:pointer}
+.practice-calendar-toolbar>button.active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--primary-deep);font-weight:700}
+.practice-calendar-toolbar>strong{margin-left:auto;font-size:9px;color:var(--primary-deep)}
+.practice-calendar{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:color-mix(in srgb,var(--page) 28%,var(--panel))}
+.practice-calendar-week,.practice-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.practice-calendar-week{border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--primary) 4%,var(--panel))}
+.practice-calendar-week span{padding:7px 0;text-align:center;font-size:9px;color:var(--muted);font-weight:650}
+.practice-calendar-day{position:relative;min-width:0;min-height:68px;padding:7px;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel);color:var(--ink);display:flex;flex-direction:column;align-items:flex-start;gap:3px;cursor:pointer;text-align:left;transition:.16s}
+.practice-calendar-day:nth-child(7n){border-right:0}
+.practice-calendar-day.blank{background:color-mix(in srgb,var(--page) 65%,var(--panel));cursor:default}
+.practice-calendar-day b{font:600 11px Georgia,serif}
+.practice-calendar-day strong{font-size:9px;color:var(--primary-deep)}
+.practice-calendar-day small{font-size:8px;color:var(--muted)}
+.practice-calendar-day.has-practice{background:color-mix(in srgb,var(--primary) 12%,var(--panel))}
+.practice-calendar-day.has-practice:after{content:"";position:absolute;right:8px;top:8px;width:7px;height:7px;border-radius:50%;background:var(--primary)}
+.practice-calendar-day.no-practice{opacity:.56;background:color-mix(in srgb,var(--page) 64%,var(--panel))}
+.practice-calendar-day.today{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 70%,var(--primary))}
+.practice-calendar-day.selected{z-index:1;box-shadow:inset 0 0 0 2px var(--primary);opacity:1;background:color-mix(in srgb,var(--primary) 19%,var(--panel))}
+.practice-calendar-day:not(.blank):hover{transform:translateY(-1px);box-shadow:inset 0 0 0 1px var(--primary)}
+.practice-calendar-legend{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin:8px 2px 14px;color:var(--muted);font-size:8.5px}
+.practice-calendar-legend span{display:flex;align-items:center;gap:5px}.practice-calendar-legend i{width:10px;height:10px;border-radius:3px;border:1px solid var(--line)}
+.practice-calendar-legend i.has-practice{background:color-mix(in srgb,var(--primary) 18%,var(--panel));border-color:color-mix(in srgb,var(--primary) 35%,var(--line))}
+.practice-calendar-legend i.no-practice{background:color-mix(in srgb,var(--page) 70%,var(--panel))}
+.practice-detail-table>div{grid-template-columns:.65fr 1.25fr .85fr .8fr 85px}
+.practice-detail-empty{display:block!important;min-width:0!important;padding:18px!important;text-align:center;color:var(--muted);font-size:10px!important}
+@media(max-width:900px){.practice-volume-bars>div{grid-template-columns:78px minmax(0,1fr) 54px 36px}.practice-calendar-day{min-height:61px;padding:6px}.practice-calendar-toolbar>strong{width:100%;margin-left:0}}
+@media(max-width:760px){.practice-calendar{overflow-x:auto}.practice-calendar-week,.practice-calendar-grid{min-width:650px}.practice-detail-table{overflow-x:auto}.practice-detail-table>div{min-width:620px}.practice-volume-panel .panel-title{align-items:stretch;flex-direction:column}.practice-volume-total{align-self:flex-start}}
