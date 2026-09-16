@@ -1430,3 +1430,33 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .practice-paper-history-table .row-actions button{padding:4px 7px;font-size:7px}
 @media(max-width:1100px){.practice-paper-default-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.practice-paper-meta{grid-template-columns:160px minmax(200px,1fr) 140px}}
 @media(max-width:760px){.practice-paper-default-grid{grid-template-columns:1fr}.paper-default-row{grid-template-columns:24px minmax(0,1fr) 74px 42px}.practice-paper-meta{grid-template-columns:1fr}.practice-paper-history-table{min-width:760px}}
+
+/* v53.10: 月历右键弹窗视口适配，靠近页面底部时向上展开，操作按钮始终可见 */
+.calendar-task-context{
+  max-height:min(520px,calc(100dvh - 24px));
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.calendar-task-context-head{
+  position:sticky;
+  top:-14px;
+  z-index:4;
+  margin:-14px -14px 0;
+  padding:14px 14px 11px;
+  background:color-mix(in srgb,var(--panel) 98%,var(--page));
+}
+.calendar-task-context-actions{
+  position:sticky;
+  bottom:-14px;
+  z-index:5;
+  margin:0 -14px -14px;
+  padding:11px 14px 14px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 92%,transparent),var(--panel) 26%);
+  backdrop-filter:blur(8px);
+}
+@media(max-width:520px){
+  .calendar-task-context{max-height:calc(100dvh - 24px)}
+  .calendar-task-context-actions{bottom:-14px}
+}

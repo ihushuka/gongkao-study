@@ -1753,9 +1753,16 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   const openTaskContext = (event: ReactMouseEvent<HTMLDivElement>, task: Task) => {
     event.preventDefault(); event.stopPropagation();
     if (task.historyPresetRecord) { flash("历史补录任务请到“学习任务 → 进度详情/修改”中调整"); return; }
-    const width = 372, height = 430;
-    const x = Math.max(12, Math.min(event.clientX, window.innerWidth - width - 12));
-    const y = Math.max(12, Math.min(event.clientY, window.innerHeight - height - 12));
+    const margin = 12;
+    const width = Math.min(372, Math.max(260, window.innerWidth - margin * 2));
+    const height = Math.min(520, Math.max(260, window.innerHeight - margin * 2));
+    const maxX = Math.max(margin, window.innerWidth - width - margin);
+    const maxY = Math.max(margin, window.innerHeight - height - margin);
+    const x = Math.max(margin, Math.min(event.clientX, maxX));
+    const spaceBelow = window.innerHeight - event.clientY - margin;
+    const spaceAbove = event.clientY - margin;
+    const preferredY = spaceBelow >= height || spaceBelow >= spaceAbove ? event.clientY : event.clientY - height;
+    const y = Math.max(margin, Math.min(preferredY, maxY));
     setTaskContext({ taskId: task.id, x, y });
     setContextCompletedLessons(task.done ? taskLessonNumbers(task) : []);
     const preset = task.presetId !== undefined ? taskPresets.find(item => item.id === task.presetId) : undefined;
