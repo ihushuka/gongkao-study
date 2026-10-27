@@ -1287,13 +1287,14 @@ function SleepTrend() {
 
 
 function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions, flash }: { presets: StudyTaskPreset[]; setPresets: Dispatch<SetStateAction<StudyTaskPreset[]>>; tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; moduleOptions: string[]; flash: (x: string) => void }) {
-  type PlanFrequency = "daily" | "weekdays" | "custom";
+  type PlanFrequency = "daily" | "weekdays" | "custom" | "dates";
   const [title, setTitle] = useState(""), [subject, setSubject] = useState(moduleOptions[0] || "资料分析"), [totalLessons, setTotalLessons] = useState(12), [startLesson, setStartLesson] = useState(1), [startLessonInput, setStartLessonInput] = useState("1"), [editingId, setEditingId] = useState<number | null>(null);
   const [taskType, setTaskType] = useState<StudyTaskKind>("course"), [subtasks, setSubtasks] = useState<StudySubtask[]>([]), [subtaskTitle, setSubtaskTitle] = useState(""), [subtaskMinutes, setSubtaskMinutes] = useState("30");
   const [historySelection, setHistorySelection] = useState<number[]>([]), [historyDate, setHistoryDate] = useState(localISO());
   const [historyDates, setHistoryDates] = useState<Record<string, string>>({}), [legacyUndated, setLegacyUndated] = useState<number[]>([]);
   const [planningPresetId, setPlanningPresetId] = useState<number | null>(null), [planStartDate, setPlanStartDate] = useState(localISO());
   const [planLessonsPerDay, setPlanLessonsPerDay] = useState(1), [planFrequency, setPlanFrequency] = useState<PlanFrequency>("weekdays"), [planWeekdays, setPlanWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [planSpecificDates, setPlanSpecificDates] = useState<string[]>([]), [planSpecificDateInput, setPlanSpecificDateInput] = useState(localISO());
   const [planMinutes, setPlanMinutes] = useState(45), [planMinutesInput, setPlanMinutesInput] = useState("45"), [planStartTime, setPlanStartTime] = useState("");
   useEffect(() => { if (moduleOptions.length && !moduleOptions.includes(subject)) setSubject(moduleOptions[0]); }, [moduleOptions, subject]);
   useEffect(() => {
@@ -1329,12 +1330,14 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     setPlanMinutesInput(String(fixed));
   };
   const openSchedulePlanner = (preset: StudyTaskPreset) => {
-    setPlanningPresetId(preset.id); setPlanStartDate(localISO());
+    const today = localISO();
+    setPlanningPresetId(preset.id); setPlanStartDate(today); setPlanSpecificDateInput(today); setPlanSpecificDates([]);
     if (presetIsComposite(preset)) {
       const totalMinutes = normalizedSubtasks(preset).reduce((sum, item) => sum + Math.max(5, Math.round(Number(item.minutes) || 30)), 0);
       const suggested = Math.max(5, totalMinutes || 45);
       setPlanMinutes(suggested); setPlanMinutesInput(String(suggested));
     }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById("task-schedule-planner")?.scrollIntoView({ behavior: "smooth", block: "start" })));
   };
   const ordered = [...presets].sort((a, b) => (a.order ?? a.id) - (b.order ?? b.id));
   const planningPreset = ordered.find(item => item.id === planningPresetId) || null;
@@ -1410,9 +1413,9 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
         resetEditor(); flash("复合学习任务与子任务已更新");
       } else {
         if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
-        const id = Date.now(), nextOrder = presets.reduce((max, item) => Math.max(max, item.order ?? 0), 0) + 10;
+        const id = Date.now(), nextOrder = presets.length ? Math.min(...presets.map(item => item.order ?? item.id)) - 10 : 10;
         const total = Math.max(1, Math.round(totalLessons));
-        setPresets(current => [...current, { id, title: clean, subject, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons: [], lessonCompletionDates: {} }]);
+        setPresets(current => [{ id, title: clean, subject, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons: [], lessonCompletionDates: {} }, ...current]);
         resetEditor(); flash("复合任务已加入任务库，可以在月历中选择具体子任务安排");
       }
       return;
@@ -1429,7 +1432,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
       if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
       const id = Date.now();
       const nextOrder = presets.reduce((max, item) => Math.max(max, item.order ?? 0), 0) + 10;
-      setPresets(current => [...current, { id, title: clean, subject, taskType: "course", totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons, lessonCompletionDates: { ...historyDates } }]);
+      setPresets(current => [{ id, title: clean, subject, taskType: "course", totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons, lessonCompletionDates: { ...historyDates } }, ...current]);
       syncHistoricalCalendarTasks(id, clean, subject, firstLesson, historyDates);
       resetEditor(); flash("学习任务已加入预设库；已完成课时已保存，有日期的记录已同步月历");
     }
@@ -1535,11 +1538,21 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     return { stats, completedGroups, scheduledGroups, lessons };
   };
   const planDateAllowed = (date: string) => {
+    const normalized = normalizedDate(date);
     if (planFrequency === "daily") return true;
-    const weekday = new Date(`${normalizedDate(date)}T12:00:00`).getDay();
+    if (planFrequency === "dates") return planSpecificDates.includes(normalized);
+    const weekday = new Date(`${normalized}T12:00:00`).getDay();
     if (planFrequency === "weekdays") return weekday >= 1 && weekday <= 5;
     return planWeekdays.includes(weekday);
   };
+  const addPlanSpecificDate = () => {
+    const date = validISODateInput(planSpecificDateInput);
+    if (!date) { flash("请选择有效排期日期"); return; }
+    if (date < normalizedDate(planStartDate)) { flash("自选日期不能早于重排起始日期"); return; }
+    setPlanSpecificDates(current => Array.from(new Set([...current, date])).sort());
+    setPlanSpecificDateInput(shiftISODate(date, 1));
+  };
+  const removePlanSpecificDate = (date: string) => setPlanSpecificDates(current => current.filter(item => item !== date));
   const buildSchedulePreview = (preset: StudyTaskPreset) => {
     const linked = tasks.filter(task => task.presetId === preset.id);
     const completed = new Set<number>([
@@ -1548,10 +1561,16 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
       ...linked.filter(task => task.done).flatMap(task => taskLessonNumbers(task)),
     ]);
     const planFloor = normalizedDate(planStartDate);
-    const fixedScheduled = new Set<number>(linked.filter(task => !task.historyPresetRecord && !task.presetAutoPlan && !task.done && (!task.date || normalizedDate(task.date) >= planFloor)).flatMap(task => taskLessonNumbers(task)));
+    const fixedScheduled = new Set<number>(linked.filter(task => {
+      if (task.historyPresetRecord || task.done) return false;
+      const taskDate = task.date ? normalizedDate(task.date) : "";
+      if (task.presetAutoPlan) return Boolean(taskDate && taskDate < planFloor);
+      return true;
+    }).flatMap(task => taskLessonNumbers(task)));
     const remaining = Array.from({ length: preset.totalLessons }, (_, index) => index + 1).filter(lesson => !completed.has(lesson) && !fixedScheduled.has(lesson));
     if (!remaining.length) return [] as { date: string; lessons: number[] }[];
     if (planFrequency === "custom" && !planWeekdays.length) return [] as { date: string; lessons: number[] }[];
+    if (planFrequency === "dates" && !planSpecificDates.some(date => date >= planFloor)) return [] as { date: string; lessons: number[] }[];
     const result: { date: string; lessons: number[] }[] = [];
     let cursor = normalizedDate(planStartDate), offset = 0, guard = 0;
     const perDay = Math.max(1, Math.min(12, Math.round(planLessonsPerDay) || 1));
@@ -1569,11 +1588,17 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     if (!allSubtaskIds.length) return [] as { date: string; lesson: number; subtaskIds: string[]; dayPosition: number }[];
     if (planFrequency === "custom" && !planWeekdays.length) return [] as { date: string; lesson: number; subtaskIds: string[]; dayPosition: number }[];
     const planFloor = normalizedDate(planStartDate);
+    if (planFrequency === "dates" && !planSpecificDates.some(date => date >= planFloor)) return [] as { date: string; lesson: number; subtaskIds: string[]; dayPosition: number }[];
     const remainingLessons: { lesson: number; subtaskIds: string[] }[] = [];
     for (let lesson = 1; lesson <= preset.totalLessons; lesson += 1) {
       const lessonTasks = linked.filter(task => taskLessonNumbers(task).includes(lesson));
       const doneIds = new Set(lessonTasks.filter(task => task.done).flatMap(task => taskSubtaskIds(task, preset)));
-      const fixedPendingIds = new Set(lessonTasks.filter(task => !task.done && !task.historyPresetRecord && !task.presetAutoPlan && (!task.date || normalizedDate(task.date) >= planFloor)).flatMap(task => taskSubtaskIds(task, preset)));
+      const fixedPendingIds = new Set(lessonTasks.filter(task => {
+        if (task.done || task.historyPresetRecord) return false;
+        const taskDate = task.date ? normalizedDate(task.date) : "";
+        if (task.presetAutoPlan) return Boolean(taskDate && taskDate < planFloor);
+        return true;
+      }).flatMap(task => taskSubtaskIds(task, preset)));
       const remainingSubtasks = allSubtaskIds.filter(id => !doneIds.has(id) && !fixedPendingIds.has(id));
       if (remainingSubtasks.length) remainingLessons.push({ lesson, subtaskIds: remainingSubtasks });
     }
@@ -1596,6 +1621,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   const applySchedulePlan = () => {
     if (!planningPreset) return;
     if (planFrequency === "custom" && !planWeekdays.length) { flash("自定义星期至少选择一天"); return; }
+    if (planFrequency === "dates" && !planSpecificDates.some(date => date >= normalizedDate(planStartDate))) { flash("请至少添加一个不早于起始日期的具体排期日期"); return; }
     const composite = presetIsComposite(planningPreset);
     const previewLength = composite ? compositeSchedulePreview.length : courseSchedulePreview.length;
     if (!previewLength) { flash("这个任务没有需要自动排期的剩余课时"); return; }
@@ -1604,7 +1630,8 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     const duration = typedDuration, startClock = planStartTime;
     setPlanMinutes(duration); setPlanMinutesInput(String(duration));
     setTasks(current => {
-      const preserved = current.filter(task => !(task.presetId === planningPreset.id && task.presetAutoPlan && !task.done));
+      const planFloor = normalizedDate(planStartDate);
+      const preserved = current.filter(task => !(task.presetId === planningPreset.id && task.presetAutoPlan && !task.done && (!task.date || normalizedDate(task.date) >= planFloor)));
       const baseId = Date.now();
       const endClock = startClock ? clockAfterMinutes(startClock, duration) : "";
       const generated: Task[] = composite ? compositeSchedulePreview.map((entry, index) => {
@@ -1644,8 +1671,15 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   };
   const clearFutureAutoPlan = () => {
     if (!planningPreset) return;
+    const floor = normalizedDate(planStartDate);
+    setTasks(current => current.filter(task => !(task.presetId === planningPreset.id && task.presetAutoPlan && !task.done && (!task.date || normalizedDate(task.date) >= floor))));
+    flash(`${planningPreset.title} 从 ${formatShortDate(floor)} 起的未完成自动排期已清除；更早排期和已完成记录保留`);
+  };
+  const clearAllFutureAutoPlan = () => {
+    if (!planningPreset) return;
+    if (!window.confirm(`确定清除“${planningPreset.title}”全部未完成自动排期吗？已完成记录不会删除。`)) return;
     setTasks(current => current.filter(task => !(task.presetId === planningPreset.id && task.presetAutoPlan && !task.done)));
-    flash(`${planningPreset.title} 尚未完成的自动排期已清除，已完成记录保留`);
+    flash(`${planningPreset.title} 全部未完成自动排期已清除，已完成记录保留`);
   };
   const weekdayLabels = [{ value: 1, label: "一" }, { value: 2, label: "二" }, { value: 3, label: "三" }, { value: 4, label: "四" }, { value: 5, label: "五" }, { value: 6, label: "六" }, { value: 0, label: "日" }];
   return <div className="page-stack task-library-page">
@@ -1669,9 +1703,9 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
         </div>}
         <button className="primary-button wide">{editingId === null ? "加入任务库" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button wide cancel-edit" onClick={resetEditor}>取消修改</button>}
       </form>
-      <section className="panel task-preset-list-panel"><div className="panel-title"><div><h2>预设任务</h2><p>“进度排期”可一次生成后续课时，并直接写入月历；重新排期只替换尚未完成的自动计划。</p></div><span>{ordered.length} 项</span></div>
+      <section className="panel task-preset-list-panel"><div className="panel-title"><div><h2>预设任务</h2><p>“进度排期”可从指定日期起重排：更早的计划保留；既可固定星期，也可逐个选择具体学习日期。</p></div><span>{ordered.length} 项</span></div>
         {detailPreset && (presetIsComposite(detailPreset) ? (() => { const detail = compositeProgressDetail(detailPreset); return <section className="preset-progress-detail composite-progress-detail"><div className="preset-progress-detail-head"><div><p className="eyebrow">PROGRESS DETAIL</p><h3>{detailPreset.title} · 课时与子任务进度</h3><span>每一课都包含同一组子任务；完成一整课需要该课的全部子任务都完成。</span></div><button type="button" onClick={() => setDetailPresetId(null)}>×</button></div><div className="preset-progress-detail-summary"><span><b>{detailPreset.totalLessons}</b> 总课时</span><span><b>{detail.stats.doneRuns.length}</b> 已完成</span><span><b>{detail.stats.lessonRows.filter(row => row.scheduled).length}</b> 已安排</span><span><b>{detail.stats.missing}</b> 未覆盖</span><span><b>{detail.stats.completedAt ? formatShortDate(detail.stats.completedAt) : "—"}</b> 实际结束</span><span><b>{detail.stats.expectedEnd ? formatShortDate(detail.stats.expectedEnd) : "—"}</b> 预计结束</span></div><div className="preset-progress-lesson-grid composite-progress-grid">{detail.items.map(item => <article className={`progress-lesson ${item.status}`} key={item.lesson}><strong>第{displayLessonNumber(detailPreset, item.lesson)}课</strong><span>{item.status === "completed" ? "已完成" : item.status === "scheduled" ? "已安排" : "未安排"}</span><small>{item.date ? formatShortDate(item.date) : "—"}</small><div className="composite-lesson-substatus">{item.subtaskStates.map(sub => <i className={sub.done ? "done" : sub.scheduled ? "scheduled" : ""} key={sub.id}>{sub.title}</i>)}</div></article>)}</div></section>; })() : (() => { const detail = progressDetail(detailPreset); return <section className="preset-progress-detail"><div className="preset-progress-detail-head"><div><p className="eyebrow">PROGRESS DETAIL</p><h3>{detailPreset.title} · 进度详情</h3><span>直接查看每一课的完成日期、待补日期和后续排期，不需要进入“修改”。</span></div><button type="button" onClick={() => setDetailPresetId(null)}>×</button></div><div className="preset-progress-detail-summary"><span><b>{detailPreset.totalLessons}</b> 总课时</span><span><b>{Math.min(detail.stats.completed.size, detailPreset.totalLessons)}</b> 已完成</span><span><b>{Math.min(detail.stats.scheduled.size, detailPreset.totalLessons)}</b> 已安排</span><span><b>{detail.stats.missing}</b> 未覆盖</span><span><b>{detail.stats.completedAt ? formatShortDate(detail.stats.completedAt) : "—"}</b> 实际结束</span><span><b>{detail.stats.expectedEnd ? formatShortDate(detail.stats.expectedEnd) : "—"}</b> 预计结束</span></div><div className="preset-progress-groups"><div><strong>完成日期记录</strong>{detail.completedGroups.length ? detail.completedGroups.map(group => <span key={`done-${group.date}`}><b>{group.date === "待补日期" ? group.date : formatShortDate(group.date)}</b> 第{formatPresetLessonSelection(detailPreset, group.lessons)}课</span>) : <small>还没有已完成课时。</small>}</div><div><strong>后续排期</strong>{detail.scheduledGroups.length ? detail.scheduledGroups.map(group => <span key={`plan-${group.date}`}><b>{group.date === "未定日期" ? group.date : formatShortDate(group.date)}</b> 第{formatPresetLessonSelection(detailPreset, group.lessons)}课</span>) : <small>当前没有尚未完成的已排课时。</small>}</div></div><div className="preset-progress-lesson-grid">{detail.lessons.map(item => <article className={`progress-lesson ${item.status}`} key={item.lesson}><strong>第{displayLessonNumber(detailPreset, item.lesson)}课</strong><span>{item.status === "completed" ? "已完成" : item.status === "scheduled" ? "已安排" : "未安排"}</span><small>{item.status === "completed" ? (item.date ? formatShortDate(item.date) : "待补日期") : item.status === "scheduled" ? (item.date ? formatShortDate(item.date) : "日期待定") : "—"}</small></article>)}</div></section>; })())}
-        {planningPreset && <section className={`preset-schedule-planner ${presetIsComposite(planningPreset) ? "composite-schedule-planner" : ""}`}><div className="preset-schedule-head"><div><p className="eyebrow">PROGRESS PLAN</p><h3>{planningPreset.title} · 进度排期</h3><span>{presetIsComposite(planningPreset) ? "复合任务按课时排期；已部分完成的课时只重排尚未完成的子任务，过去未完成的课时也会重新纳入排期。" : "自动跳过已完成课时；排期开始日前仍未完成的旧计划会重新纳入排期。"}</span></div><button type="button" onClick={() => setPlanningPresetId(null)}>×</button></div><div className="preset-schedule-controls"><label>从哪天开始<input type="date" value={planStartDate} onChange={e => setPlanStartDate(e.target.value)} /></label><label>每个学习日<DraftNumberInput min={1} max={12} value={planLessonsPerDay} onValueChange={setPlanLessonsPerDay} /><small>课/天</small></label><label>学习频率<select value={planFrequency} onChange={e => setPlanFrequency(e.target.value as PlanFrequency)}><option value="daily">每天</option><option value="weekdays">周一至周五</option><option value="custom">自定义星期</option></select></label><label>每次预计时长<input type="number" min="5" step="5" value={planMinutesInput} onChange={e => changePlanMinutes(e.target.value)} onBlur={commitPlanMinutes} /><small>分钟 · 可先清空再输入</small></label><label>默认开始时间<input type="time" value={planStartTime} onChange={e => setPlanStartTime(e.target.value)} /><small>可留空，之后再安排时间</small></label></div>{presetIsComposite(planningPreset) && <div className="composite-schedule-all-subtasks"><strong>每课固定包含的子任务</strong><div>{normalizedSubtasks(planningPreset).map(item => <span key={item.id}>{item.title}<small>{item.minutes ? `${item.minutes}分钟` : ""}</small></span>)}</div></div>}{planFrequency === "custom" && <div className="preset-weekday-picker">{weekdayLabels.map(day => <button type="button" className={planWeekdays.includes(day.value) ? "active" : ""} key={day.value} onClick={() => setPlanWeekdays(current => current.includes(day.value) ? current.filter(value => value !== day.value) : [...current, day.value])}>周{day.label}</button>)}</div>}<div className="preset-schedule-preview"><div><strong>排期预览</strong><span>{presetIsComposite(planningPreset) ? (compositeSchedulePreview.length ? `共 ${compositeSchedulePreview.length} 课 · ${new Set(compositeSchedulePreview.map(entry => entry.date)).size} 个学习日 · 预计 ${formatShortDate(compositeSchedulePreview[compositeSchedulePreview.length - 1].date)} 完成` : "暂无可生成课时") : (courseSchedulePreview.length ? `共 ${courseSchedulePreview.length} 个学习日 · 预计 ${formatShortDate(courseSchedulePreview[courseSchedulePreview.length - 1].date)} 完成` : "暂无可生成课时")}</span></div><div className="preset-schedule-preview-list">{presetIsComposite(planningPreset) ? compositeSchedulePreview.slice(0, 12).map(entry => <span key={`${entry.date}-${entry.lesson}`}>{formatShortDate(entry.date)} · 第{displayLessonNumber(planningPreset, entry.lesson)}课 · 待做 {entry.subtaskIds.length} 项</span>) : courseSchedulePreview.slice(0, 12).map(entry => <span key={`${entry.date}-${entry.lessons.join('-')}`}>{formatShortDate(entry.date)} · 第{formatPresetLessonSelection(planningPreset, entry.lessons)}课</span>)}{(presetIsComposite(planningPreset) ? compositeSchedulePreview.length : courseSchedulePreview.length) > 12 ? <span>…另有 {(presetIsComposite(planningPreset) ? compositeSchedulePreview.length : courseSchedulePreview.length) - 12} 个学习日</span> : null}</div></div><div className="preset-schedule-actions"><button type="button" className="primary-button" onClick={applySchedulePlan}>同步到月历</button><button type="button" className="soft-button" onClick={clearFutureAutoPlan}>清除未完成自动排期</button></div></section>}
+        {planningPreset && <section id="task-schedule-planner" className={`preset-schedule-planner ${presetIsComposite(planningPreset) ? "composite-schedule-planner" : ""}`}><div className="preset-schedule-head"><div><p className="eyebrow">PROGRESS PLAN</p><h3>{planningPreset.title} · 进度排期</h3><span>{presetIsComposite(planningPreset) ? "复合任务按课时排期；已部分完成的课时只重排尚未完成的子任务，过去未完成的课时也会重新纳入排期。" : "自动跳过已完成课时；排期开始日前仍未完成的旧计划会重新纳入排期。"}</span></div><button type="button" onClick={() => setPlanningPresetId(null)}>×</button></div><div className="preset-schedule-controls"><label>从哪天开始<input type="date" value={planStartDate} onChange={e => { setPlanStartDate(e.target.value); setPlanSpecificDates(current => current.filter(date => date >= e.target.value)); if (planSpecificDateInput < e.target.value) setPlanSpecificDateInput(e.target.value); }} /></label><label>每个学习日<DraftNumberInput min={1} max={12} value={planLessonsPerDay} onValueChange={setPlanLessonsPerDay} /><small>课/天</small></label><label>学习频率<select value={planFrequency} onChange={e => setPlanFrequency(e.target.value as PlanFrequency)}><option value="daily">每天</option><option value="weekdays">周一至周五</option><option value="custom">固定星期</option><option value="dates">自选具体日期（每周可不同）</option></select></label><label>每次预计时长<input type="number" min="5" step="5" value={planMinutesInput} onChange={e => changePlanMinutes(e.target.value)} onBlur={commitPlanMinutes} /><small>分钟 · 可先清空再输入</small></label><label>默认开始时间<input type="time" value={planStartTime} onChange={e => setPlanStartTime(e.target.value)} /><small>可留空，之后再安排时间</small></label></div>{presetIsComposite(planningPreset) && <div className="composite-schedule-all-subtasks"><strong>每课固定包含的子任务</strong><div>{normalizedSubtasks(planningPreset).map(item => <span key={item.id}>{item.title}<small>{item.minutes ? `${item.minutes}分钟` : ""}</small></span>)}</div></div>}{planFrequency === "custom" && <div className="preset-weekday-picker">{weekdayLabels.map(day => <button type="button" className={planWeekdays.includes(day.value) ? "active" : ""} key={day.value} onClick={() => setPlanWeekdays(current => current.includes(day.value) ? current.filter(value => value !== day.value) : [...current, day.value])}>周{day.label}</button>)}</div>}{planFrequency === "dates" && <div className="preset-specific-date-picker"><div className="preset-specific-date-add"><label>添加具体日期<input type="date" value={planSpecificDateInput} min={normalizedDate(planStartDate)} onChange={e => setPlanSpecificDateInput(e.target.value)} /></label><button type="button" className="soft-button" onClick={addPlanSpecificDate}>＋ 加入日期</button></div><div className="preset-specific-date-list">{planSpecificDates.filter(date => date >= normalizedDate(planStartDate)).length ? planSpecificDates.filter(date => date >= normalizedDate(planStartDate)).map(date => <button type="button" key={date} onClick={() => removePlanSpecificDate(date)} title="点击移除这个排期日期"><span>{formatShortDate(date)}</span><small>×</small></button>) : <span className="preset-specific-date-empty">逐个加入实际想学习的日期；不同周可以选择完全不同的星期。</span>}</div></div>}<div className="preset-schedule-preview"><div><strong>排期预览</strong><span>{presetIsComposite(planningPreset) ? (compositeSchedulePreview.length ? `共 ${compositeSchedulePreview.length} 课 · ${new Set(compositeSchedulePreview.map(entry => entry.date)).size} 个学习日 · 预计 ${formatShortDate(compositeSchedulePreview[compositeSchedulePreview.length - 1].date)} 完成` : "暂无可生成课时") : (courseSchedulePreview.length ? `共 ${courseSchedulePreview.length} 个学习日 · 预计 ${formatShortDate(courseSchedulePreview[courseSchedulePreview.length - 1].date)} 完成` : "暂无可生成课时")}</span></div><div className="preset-schedule-preview-list">{presetIsComposite(planningPreset) ? compositeSchedulePreview.slice(0, 12).map(entry => <span key={`${entry.date}-${entry.lesson}`}>{formatShortDate(entry.date)} · 第{displayLessonNumber(planningPreset, entry.lesson)}课 · 待做 {entry.subtaskIds.length} 项</span>) : courseSchedulePreview.slice(0, 12).map(entry => <span key={`${entry.date}-${entry.lessons.join('-')}`}>{formatShortDate(entry.date)} · 第{formatPresetLessonSelection(planningPreset, entry.lessons)}课</span>)}{(presetIsComposite(planningPreset) ? compositeSchedulePreview.length : courseSchedulePreview.length) > 12 ? <span>…另有 {(presetIsComposite(planningPreset) ? compositeSchedulePreview.length : courseSchedulePreview.length) - 12} 个学习日</span> : null}</div></div><div className="preset-schedule-actions"><button type="button" className="primary-button" onClick={applySchedulePlan}>从所选日期起重新排期并同步</button><button type="button" className="soft-button" onClick={clearFutureAutoPlan}>清除所选日期起的自动排期</button><button type="button" className="soft-button danger-soft" onClick={clearAllFutureAutoPlan}>清除全部未完成排期</button></div></section>}
         {ordered.length ? <div className="task-preset-list">{ordered.map(preset => {
           if (presetIsComposite(preset)) {
             const stats = compositeStats(preset), percent = preset.totalLessons ? Math.min(100, Math.round(stats.doneRuns.length / preset.totalLessons * 100)) : 0;
