@@ -1472,3 +1472,31 @@ html.ui-radius-custom [data-ui-module]:is(.panel,.hero-card,.metric-card,.page-i
 .preset-specific-date-list button small { color: var(--muted); font-size: 13px; }
 .preset-specific-date-empty { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .preset-schedule-actions .danger-soft { border-color: color-mix(in srgb, #c64848 35%, var(--line)); color: #a43d3d; }
+
+/* v53.14: schedule date multi-select calendar */
+.preset-specific-calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+.preset-specific-calendar-head > div:first-child { display: grid; gap: 3px; }
+.preset-specific-calendar-head strong { font-size: 14px; color: var(--text); }
+.preset-specific-calendar-head small { font-size: 11px; color: var(--muted); }
+.preset-specific-calendar-nav { display: inline-flex; align-items: center; gap: 8px; }
+.preset-specific-calendar-nav b { min-width: 90px; text-align: center; font-size: 13px; color: var(--text); }
+.preset-specific-calendar-nav button { width: 30px; height: 30px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line)); background: color-mix(in srgb, var(--primary) 7%, var(--surface)); color: var(--primary); cursor: pointer; }
+.preset-specific-calendar-week,
+.preset-specific-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.preset-specific-calendar-week { margin-bottom: 6px; }
+.preset-specific-calendar-week span { text-align: center; font-size: 10px; color: var(--muted); }
+.preset-specific-calendar-grid > span.blank { min-height: 42px; }
+.preset-specific-calendar-grid button { min-height: 42px; position: relative; display: grid; place-items: center; border-radius: 11px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; transition: .16s ease; }
+.preset-specific-calendar-grid button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--primary) 55%, var(--line)); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); transform: translateY(-1px); }
+.preset-specific-calendar-grid button.today { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent); }
+.preset-specific-calendar-grid button.selected { border-color: color-mix(in srgb, var(--primary) 72%, var(--line)); background: color-mix(in srgb, var(--primary) 20%, var(--surface)); color: var(--primary); font-weight: 700; }
+.preset-specific-calendar-grid button:disabled { opacity: .28; cursor: not-allowed; background: color-mix(in srgb, var(--surface) 85%, var(--page)); }
+.preset-specific-calendar-grid button b { font-size: 12px; }
+.preset-specific-calendar-grid button small { position: absolute; right: 5px; top: 3px; font-size: 9px; color: var(--primary); }
+.preset-specific-date-count { display: inline-flex; align-items: center; padding: 7px 10px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 7%, var(--surface)); color: var(--muted); font-size: 11px; }
+@media (max-width: 760px) {
+  .preset-specific-calendar-head { align-items: flex-start; flex-direction: column; }
+  .preset-specific-calendar-nav { width: 100%; justify-content: space-between; }
+  .preset-specific-calendar-grid > span.blank,
+  .preset-specific-calendar-grid button { min-height: 38px; }
+}
