@@ -6,9 +6,9 @@ type SupervisionState = { delayCount?: number; postponedUntil?: string; reasons?
 type TimeSlot = { start: string; end: string };
 type StudyTaskKind = "course" | "composite";
 type StudySubtask = { id: string; title: string; minutes?: number; order?: number };
-type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; subtaskIds?: string[]; compositeRunId?: string; historyPresetRecord?: boolean; presetAutoPlan?: boolean; migrationHidden?: boolean };
+type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; subtaskIds?: string[]; compositeRunId?: string; historyPresetRecord?: boolean; presetAutoPlan?: boolean; followSourcePresetId?: number; migrationHidden?: boolean };
 type TaskMigrationMarker = { id: number; targetTaskId: number; title: string; subject: string; date: string; targetDate: string; presetId?: number; lessonNumbers?: number[]; completedLessonNumbers?: number[]; originalLessonCount?: number; subtaskIds?: string[]; completedSubtaskIds?: string[]; originalSubtaskCount?: number; sourceTask?: Task; hiddenCompletedTaskId?: number };
-type StudyTaskPreset = { id: number; title: string; subject: string; totalLessons: number; startLesson?: number; order?: number; completedLessons?: number[]; lessonCompletionDates?: Record<string, string>; taskType?: StudyTaskKind; subtasks?: StudySubtask[]; completedSubtasks?: string[]; subtaskCompletionDates?: Record<string, string> };
+type StudyTaskPreset = { id: number; title: string; subject: string; totalLessons: number; startLesson?: number; order?: number; completedLessons?: number[]; lessonCompletionDates?: Record<string, string>; taskType?: StudyTaskKind; subtasks?: StudySubtask[]; completedSubtasks?: string[]; subtaskCompletionDates?: Record<string, string>; followPresetId?: number; followStartDate?: string };
 type DailyRoutine = { id: number; title: string; subject: string; minutes: number; month: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; completedDates: string[]; skippedDates?: string[]; supervision?: Record<string, SupervisionState> };
 type Practice = { id: number; date: string; source: string; module: string; correct: number; total: number; minutes: number; presetId?: number; lessonNumbers?: number[]; subtaskIds?: string[] };
 type PracticePaperModuleResult = { module: string; correct: number; total: number };
@@ -542,6 +542,65 @@ export default function App() {
   const [idioms, setIdioms] = useStoredState<Idiom[]>("shore-idioms", seedIdioms);
   const [moduleOptions, setModuleOptions] = useStoredState<string[]>("shore-practice-modules", modules);
   const [taskPresets, setTaskPresets] = useStoredState<StudyTaskPreset[]>("shore-study-task-presets", []);
+  useEffect(() => {
+    setTasks(current => {
+      const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
+      let next = current.filter(task => {
+        if (!task.followSourcePresetId || task.done) return true;
+        const target = task.presetId ? presetMap.get(task.presetId) : undefined;
+        return Boolean(target && target.followPresetId === task.followSourcePresetId);
+      });
+      let seed = Date.now();
+      for (const follower of taskPresets) {
+        if (!follower.followPresetId || follower.followPresetId === follower.id) continue;
+        const source = presetMap.get(follower.followPresetId);
+        if (!source) continue;
+        const followFloor = normalizedDate(follower.followStartDate || localISO());
+        const sourceDates = Array.from(new Set(next.filter(task => task.presetId === source.id && !task.historyPresetRecord && !task.migrationHidden && task.date && normalizedDate(task.date) >= followFloor).map(task => normalizedDate(task.date)))).sort();
+        const targetTasks = next.filter(task => task.presetId === follower.id);
+        const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done);
+        const pendingByDate = new Map(pendingFollow.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
+        const completedLessons = new Set<number>([
+          ...normalizedLessonNumbers(follower.completedLessons, follower.totalLessons),
+          ...normalizedLessonNumbers(Object.keys(follower.lessonCompletionDates || {}).map(Number), follower.totalLessons),
+          ...targetTasks.filter(task => task.done).flatMap(task => taskLessonNumbers(task)),
+        ]);
+        const occupiedLessons = new Set<number>(targetTasks.filter(task => task.followSourcePresetId !== source.id || task.done).flatMap(task => taskLessonNumbers(task)));
+        const completedFollowDates = new Set(targetTasks.filter(task => task.followSourcePresetId === source.id && task.done && task.date).map(task => normalizedDate(task.date)));
+        const availableLessons = Array.from({ length: Math.max(1, follower.totalLessons) }, (_, index) => index + 1).filter(lesson => !completedLessons.has(lesson) && !occupiedLessons.has(lesson));
+        const desired: Task[] = [];
+        let lessonOffset = 0;
+        for (const date of sourceDates) {
+          if (completedFollowDates.has(date)) continue;
+          const lesson = availableLessons[lessonOffset++];
+          if (!lesson) break;
+          const existing = pendingByDate.get(date);
+          const subtaskIds = presetIsComposite(follower) ? normalizedSubtasks(follower).map(item => item.id) : undefined;
+          const minutes = presetIsComposite(follower) ? Math.max(5, normalizedSubtasks(follower).reduce((sum, item) => sum + Math.max(5, Math.round(Number(item.minutes) || 30)), 0)) : Math.max(5, existing?.minutes || 45);
+          const title = presetIsComposite(follower) ? compositeLessonTaskTitle(follower, [lesson], subtaskIds || []) : presetTaskTitle(follower, [lesson]);
+          desired.push({
+            ...(existing || {} as Task),
+            id: existing?.id || seed++,
+            title,
+            subject: follower.subject,
+            minutes,
+            done: false,
+            date,
+            presetId: follower.id,
+            lessonNumber: lesson,
+            lessonNumbers: [lesson],
+            ...(subtaskIds ? { subtaskIds, compositeRunId: `${follower.id}-lesson-${lesson}` } : {}),
+            historyPresetRecord: undefined,
+            presetAutoPlan: true,
+            followSourcePresetId: source.id,
+            migrationHidden: undefined,
+          });
+        }
+        next = [...next.filter(task => !(task.presetId === follower.id && task.followSourcePresetId === source.id && !task.done)), ...desired];
+      }
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next;
+    });
+  }, [taskPresets, tasks, setTasks]);
   const [timerOn, setTimerOn] = useState(false);
   const [timerPaused, setTimerPaused] = useState(false);
   const [timerPausedAt, setTimerPausedAt] = useState<Date | null>(null);
@@ -1296,6 +1355,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   const [planLessonsPerDay, setPlanLessonsPerDay] = useState(1), [planFrequency, setPlanFrequency] = useState<PlanFrequency>("weekdays"), [planWeekdays, setPlanWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [planSpecificDates, setPlanSpecificDates] = useState<string[]>([]), [planSpecificMonth, setPlanSpecificMonth] = useState(localISO().slice(0, 7));
   const [planMinutes, setPlanMinutes] = useState(45), [planMinutesInput, setPlanMinutesInput] = useState("45"), [planStartTime, setPlanStartTime] = useState("");
+  const [followPresetId, setFollowPresetId] = useState<number | null>(null), [followStartDate, setFollowStartDate] = useState(localISO());
   useEffect(() => { if (moduleOptions.length && !moduleOptions.includes(subject)) setSubject(moduleOptions[0]); }, [moduleOptions, subject]);
   useEffect(() => {
     setHistorySelection(current => normalizedLessonNumbers(current, totalLessons));
@@ -1343,7 +1403,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   const planningPreset = ordered.find(item => item.id === planningPresetId) || null;
   const [detailPresetId, setDetailPresetId] = useState<number | null>(null);
   const detailPreset = ordered.find(item => item.id === detailPresetId) || null;
-  const resetEditor = () => { setEditingId(null); setTitle(""); setTaskType("course"); setSubtasks([]); setSubtaskTitle(""); setSubtaskMinutes("30"); setTotalLessons(12); setStartLesson(1); setStartLessonInput("1"); setHistorySelection([]); setHistoryDates({}); setLegacyUndated([]); setHistoryDate(localISO()); };
+  const resetEditor = () => { setEditingId(null); setTitle(""); setTaskType("course"); setSubtasks([]); setSubtaskTitle(""); setSubtaskMinutes("30"); setTotalLessons(12); setStartLesson(1); setStartLessonInput("1"); setHistorySelection([]); setHistoryDates({}); setLegacyUndated([]); setHistoryDate(localISO()); setFollowPresetId(null); setFollowStartDate(localISO()); };
   const addCompositeSubtask = () => {
     const clean = subtaskTitle.trim();
     if (!clean) { flash("请填写子任务名称"); return; }
@@ -1399,6 +1459,18 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     const clean = title.trim(), firstLesson = Math.max(1, Math.round(Number(startLessonInput) || startLesson || 1));
     if (!clean) { flash("请填写学习任务名称"); return; }
     const existingPreset = editingId !== null ? presets.find(item => item.id === editingId) : undefined;
+    const selectedFollowSource = followPresetId ? presets.find(item => item.id === followPresetId) : undefined;
+    if (followPresetId && !selectedFollowSource) { flash("选择的跟随任务不存在，请重新选择"); return; }
+    if (editingId !== null && followPresetId) {
+      let cursor: number | undefined = followPresetId;
+      const seen = new Set<number>();
+      while (cursor && !seen.has(cursor)) {
+        if (cursor === editingId) { flash("排期跟随不能形成循环关系，请选择其他任务"); return; }
+        seen.add(cursor);
+        cursor = presets.find(item => item.id === cursor)?.followPresetId;
+      }
+    }
+    const followFields = selectedFollowSource ? { followPresetId: selectedFollowSource.id, followStartDate: normalizedDate(followStartDate || localISO()) } : { followPresetId: undefined, followStartDate: undefined };
     const existingType: StudyTaskKind = presetIsComposite(existingPreset) ? "composite" : "course";
     if (existingPreset && existingType !== taskType && tasks.some(task => task.presetId === editingId)) { flash("这个任务已经关联月历记录，暂不能直接切换普通/复合类型；请新建一个复合任务以避免历史记录错位"); return; }
     if (taskType === "composite") {
@@ -1408,14 +1480,14 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
       if (editingId !== null) {
         const validIds = new Set(cleanSubtasks.map(item => item.id));
         const total = Math.max(1, Math.round(totalLessons));
-        setPresets(current => current.map(item => item.id === editingId ? { ...item, title: clean, subject, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, completedLessons: normalizedLessonNumbers(item.completedLessons, total), lessonCompletionDates: Object.fromEntries(Object.entries(item.lessonCompletionDates || {}).filter(([lesson]) => Number(lesson) >= 1 && Number(lesson) <= total)) } : item));
+        setPresets(current => current.map(item => item.id === editingId ? { ...item, ...followFields, title: clean, subject, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, completedLessons: normalizedLessonNumbers(item.completedLessons, total), lessonCompletionDates: Object.fromEntries(Object.entries(item.lessonCompletionDates || {}).filter(([lesson]) => Number(lesson) >= 1 && Number(lesson) <= total)) } : item));
         setTasks(current => current.map(task => task.presetId === editingId ? { ...task, subject, subtaskIds: (task.subtaskIds || []).filter(id => validIds.has(id)), title: task.subtaskIds?.length ? compositeLessonTaskTitle({ title: clean, startLesson: firstLesson, subtasks: cleanSubtasks }, normalizedLessonNumbers(taskLessonNumbers(task), total), task.subtaskIds.filter(id => validIds.has(id))) : task.title } : task));
         resetEditor(); flash("复合学习任务与子任务已更新");
       } else {
         if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
         const id = Date.now(), nextOrder = presets.length ? Math.min(...presets.map(item => item.order ?? item.id)) - 10 : 10;
         const total = Math.max(1, Math.round(totalLessons));
-        setPresets(current => [{ id, title: clean, subject, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons: [], lessonCompletionDates: {} }, ...current]);
+        setPresets(current => [{ id, title: clean, subject, ...followFields, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons: [], lessonCompletionDates: {} }, ...current]);
         resetEditor(); flash("复合任务已加入任务库，可以在月历中选择具体子任务安排");
       }
       return;
@@ -1424,7 +1496,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     const dated = normalizedLessonNumbers(Object.keys(historyDates).map(Number), total);
     const completedLessons = normalizedLessonNumbers([...legacyUndated, ...dated], total);
     if (editingId !== null) {
-      setPresets(current => current.map(item => item.id === editingId ? { ...item, title: clean, subject, taskType: "course", subtasks: undefined, totalLessons: total, startLesson: firstLesson, completedLessons, lessonCompletionDates: { ...historyDates } } : item));
+      setPresets(current => current.map(item => item.id === editingId ? { ...item, ...followFields, title: clean, subject, taskType: "course", subtasks: undefined, totalLessons: total, startLesson: firstLesson, completedLessons, lessonCompletionDates: { ...historyDates } } : item));
       setTasks(current => current.map(task => task.presetId === editingId && !task.historyPresetRecord ? { ...task, subject, title: taskLessonNumbers(task).length ? presetTaskTitle({ title: clean, startLesson: firstLesson }, taskLessonNumbers(task)) : task.title } : task));
       syncHistoricalCalendarTasks(editingId, clean, subject, firstLesson, historyDates);
       resetEditor(); flash("学习任务与完成进度已更新；有日期的历史记录已同步到月历");
@@ -1432,14 +1504,15 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
       if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
       const id = Date.now();
       const nextOrder = presets.length ? Math.min(...presets.map(item => item.order ?? item.id)) - 10 : 10;
-      setPresets(current => [{ id, title: clean, subject, taskType: "course", totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons, lessonCompletionDates: { ...historyDates } }, ...current]);
+      setPresets(current => [{ id, title: clean, subject, ...followFields, taskType: "course", totalLessons: total, startLesson: firstLesson, order: nextOrder, completedLessons, lessonCompletionDates: { ...historyDates } }, ...current]);
       syncHistoricalCalendarTasks(id, clean, subject, firstLesson, historyDates);
       resetEditor(); flash("学习任务已加入预设库；已完成课时已保存，有日期的记录已同步月历");
     }
   };
   const editPreset = (preset: StudyTaskPreset) => {
     const composite = presetIsComposite(preset);
-    setEditingId(preset.id); setTitle(preset.title); setSubject(preset.subject); setTaskType(composite ? "composite" : "course");
+    setEditingId(preset.id); setTitle(preset.title); setSubject(preset.subject); setTaskType(composite ? "composite" : "course"); setFollowPresetId(preset.followPresetId || null); setFollowStartDate(normalizedDate(preset.followStartDate || localISO()));
+    window.requestAnimationFrame(() => document.querySelector(".task-preset-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     if (composite) {
       setSubtasks(normalizedSubtasks(preset)); setSubtaskTitle(""); setSubtaskMinutes("30");
       setTotalLessons(Math.max(1, preset.totalLessons || 1)); setStartLesson(presetStartLesson(preset)); setStartLessonInput(String(presetStartLesson(preset))); setHistoryDates({}); setHistorySelection([]); setLegacyUndated([]); setHistoryDate(localISO());
@@ -1453,8 +1526,8 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   };
   const deletePreset = (preset: StudyTaskPreset) => {
     if (!window.confirm(`确定删除预设任务“${preset.title}”吗？\\n已经加入月度计划的任务不会被删除。`)) return;
-    setPresets(current => current.filter(item => item.id !== preset.id));
-    setTasks(current => current.map(task => task.presetId === preset.id ? { ...task, presetId: undefined, lessonNumber: undefined, lessonNumbers: undefined, subtaskIds: undefined, historyPresetRecord: undefined, presetAutoPlan: undefined } : task));
+    setPresets(current => current.filter(item => item.id !== preset.id).map(item => item.followPresetId === preset.id ? { ...item, followPresetId: undefined, followStartDate: undefined } : item));
+    setTasks(current => current.filter(task => !(task.followSourcePresetId === preset.id && !task.done)).map(task => task.presetId === preset.id ? { ...task, presetId: undefined, lessonNumber: undefined, lessonNumbers: undefined, subtaskIds: undefined, historyPresetRecord: undefined, presetAutoPlan: undefined, followSourcePresetId: undefined } : task));
     if (editingId === preset.id) resetEditor();
     if (planningPresetId === preset.id) setPlanningPresetId(null);
     if (detailPresetId === preset.id) setDetailPresetId(null);
@@ -1701,6 +1774,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
         <label>任务名称<input value={title} onChange={e => setTitle(e.target.value)} placeholder="例如：张弓十二箭 / 粉笔模考复盘" /></label>
         <div className="task-type-switch"><button type="button" className={taskType === "course" ? "active" : ""} onClick={() => setTaskType("course")}><strong>普通课程</strong><span>按第1课、第2课…管理</span></button><button type="button" className={taskType === "composite" ? "active" : ""} onClick={() => setTaskType("composite")}><strong>复合任务</strong><span>按课时推进，每课含固定子任务</span></button></div>
         <label>学习模块<select value={subject} onChange={e => setSubject(e.target.value)}>{moduleOptions.map(item => <option key={item}>{item}</option>)}</select></label>
+        <div className={`follow-schedule-editor ${followPresetId ? "active" : ""}`}><div className="follow-schedule-head"><div><strong>跟随已有任务排期（可选）</strong><small>例如“行测复盘”跟随“行测”：行测安排在哪一天，复盘就会自动在同一天生成一项；源任务后续改期也会同步。</small></div>{followPresetId ? <span>持续同步</span> : null}</div><div className="follow-schedule-fields"><label>参照任务<select value={followPresetId || ""} onChange={e => { const nextId = Number(e.target.value) || null; setFollowPresetId(nextId); if (nextId && editingId === null) setFollowStartDate(localISO()); }}><option value="">不跟随，独立排期</option>{ordered.filter(item => item.id !== editingId).map(item => <option key={item.id} value={item.id}>{item.title} · {item.subject}</option>)}</select></label>{followPresetId ? <label>从哪天开始同步<input type="date" value={followStartDate} onChange={e => setFollowStartDate(e.target.value)} /></label> : null}</div>{followPresetId ? <p>只同步“日期”，不会复制对方的具体开始/结束时间。已完成的本任务记录会保留，不会因源任务以后改期而回退。</p> : null}</div>
         {taskType === "course" ? <>
           <div className="form-grid task-numbering-grid"><label>总课时<DraftNumberInput min={1} value={totalLessons} onValueChange={setTotalLessons} /></label><label>起始课号<input type="number" min="1" max="9999" value={startLessonInput} onChange={e => changeStartLesson(e.target.value)} onBlur={commitStartLesson} /><small>例如填32，则本任务编号为第32课起</small></label></div><p className="task-numbering-preview">当前编号范围：第 <b>{startLesson}</b> 课 ～ 第 <b>{startLesson + totalLessons - 1}</b> 课；内部进度按课时顺序保存。</p>
           <div className="preset-history-editor dated-history-editor"><div className="preset-history-head"><div><strong>历史完成记录</strong><small>先勾选已学完的课时，可以直接标记“已完成但暂不填日期”；以后再选这些课时补完成日期。</small></div></div><div className="history-complete-toolbar"><button type="button" className="primary-button" onClick={markHistoryCompletedUndated}>✓ 标记所选课时已完成（暂不填日期）</button><span>适合先补课程进度，完成日期之后再慢慢补。</span></div><div className="history-date-toolbar"><label>补充完成日期<input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} /></label><button type="button" className="soft-button" onClick={assignHistoryDate}>＋ 给所选课时补日期并同步月历</button><button type="button" onClick={() => setHistorySelection(Array.from({ length: totalLessons }, (_, index) => index + 1))}>全选</button><button type="button" onClick={() => setHistorySelection([])}>清空选择</button></div><div className="lesson-chip-grid">{Array.from({ length: totalLessons }, (_, index) => index + 1).map(lesson => { const date = historyDates[String(lesson)]; const undated = legacyUndated.includes(lesson); return <button type="button" key={lesson} className={`${historySelection.includes(lesson) ? "selected" : ""} ${date ? "history-dated" : undated ? "history-undated" : ""}`} onClick={() => toggleHistoryLesson(lesson)} title={date ? `第${displayLessonNumber({ startLesson }, lesson)}课 · ${date}已完成` : undated ? `第${displayLessonNumber({ startLesson }, lesson)}课 · 已完成，尚未填写日期` : `第${displayLessonNumber({ startLesson }, lesson)}课`}>{displayLessonNumber({ startLesson }, lesson)}{date ? <small>{formatShortDate(date)}</small> : undated ? <small>待补日期</small> : null}</button>; })}</div>{legacyUndated.length ? <div className="legacy-history-note"><span>已完成但尚未填写日期：第{formatPresetLessonSelection({ startLesson }, legacyUndated)}课。以后选中这些课时，再填写日期即可同步到月历。</span><button type="button" onClick={() => setLegacyUndated([])}>取消这些完成状态</button></div> : null}<div className="history-record-list">{historyGroups().map(group => <article key={group.date}><div><strong>{formatShortDate(group.date)}</strong><span>第{formatPresetLessonSelection({ startLesson }, group.lessons)}课</span></div><button type="button" onClick={() => removeHistoryGroup(group.date)}>删除这天记录</button></article>)}</div><p>已记录具体日期 <b>{datedLessons().length}</b> 课{legacyUndated.length ? ` · 另有 ${legacyUndated.length} 课待补日期` : ""}</p></div>
@@ -1720,12 +1794,12 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
           if (presetIsComposite(preset)) {
             const stats = compositeStats(preset), percent = preset.totalLessons ? Math.min(100, Math.round(stats.doneRuns.length / preset.totalLessons * 100)) : 0;
             const finishLabel = stats.doneRuns.length >= preset.totalLessons ? (stats.completedAt ? `已完成 · ${formatShortDate(stats.completedAt)}` : "已完成") : stats.expectedEnd ? `预计结束 ${formatShortDate(stats.expectedEnd)}` : `还差 ${stats.missing} 课未排`;
-            return <article className="task-preset-card composite-preset-card" key={preset.id} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); movePreset(Number(event.dataTransfer.getData("text/plain")), preset.id); }}><i className="task-preset-drag" draggable title="拖动排序" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(preset.id)); }}>≡</i><div className="task-preset-main"><div><strong>{preset.title}</strong><span>{preset.subject} · 复合任务</span></div><p>编号 {presetStartLesson(preset)}–{presetStartLesson(preset) + preset.totalLessons - 1} · 总课时 {preset.totalLessons} · 每课 {stats.units.length} 个子任务 · 已完成 {stats.doneRuns.length} 课 · 已安排 {stats.lessonRows.filter(row => row.scheduled).length} 课</p><div className="composite-subtask-summary">{stats.units.map(item => <span key={item.id}>{item.title}</span>)}</div><div className="task-preset-deadline"><b>{finishLabel}</b>{stats.autoPending ? <span>自动排期 {stats.autoPending} 课 · 每课含全部子任务</span> : <span>月历可按课时进入，并在课内按子任务完成/迁移</span>}</div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div><div className="task-preset-actions"><button type="button" className="detail" onClick={() => setDetailPresetId(current => current === preset.id ? null : preset.id)}>进度详情</button><button type="button" className="schedule" onClick={() => openSchedulePlanner(preset)}>进度排期</button><button type="button" onClick={() => editPreset(preset)}>修改</button><button type="button" onClick={() => deletePreset(preset)}>删除</button></div></article>;
+            return <article className="task-preset-card composite-preset-card" key={preset.id} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); movePreset(Number(event.dataTransfer.getData("text/plain")), preset.id); }}><i className="task-preset-drag" draggable title="拖动排序" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(preset.id)); }}>≡</i><div className="task-preset-main"><div><strong>{preset.title}</strong><span>{preset.subject} · 复合任务</span></div><p>编号 {presetStartLesson(preset)}–{presetStartLesson(preset) + preset.totalLessons - 1} · 总课时 {preset.totalLessons} · 每课 {stats.units.length} 个子任务 · 已完成 {stats.doneRuns.length} 课 · 已安排 {stats.lessonRows.filter(row => row.scheduled).length} 课{preset.followPresetId ? ` · 跟随 ${presets.find(item => item.id === preset.followPresetId)?.title || "其他任务"}` : ""}</p><div className="composite-subtask-summary">{stats.units.map(item => <span key={item.id}>{item.title}</span>)}</div><div className="task-preset-deadline"><b>{finishLabel}</b>{stats.autoPending ? <span>自动排期 {stats.autoPending} 课 · 每课含全部子任务</span> : <span>月历可按课时进入，并在课内按子任务完成/迁移</span>}</div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div><div className="task-preset-actions"><button type="button" className="detail" onClick={() => setDetailPresetId(current => current === preset.id ? null : preset.id)}>进度详情</button><button type="button" className="schedule" onClick={() => preset.followPresetId ? editPreset(preset) : openSchedulePlanner(preset)}>{preset.followPresetId ? "跟随设置" : "进度排期"}</button><button type="button" onClick={() => editPreset(preset)}>修改</button><button type="button" onClick={() => deletePreset(preset)}>删除</button></div></article>;
           }
           const stats = scheduleStats(preset), percent = preset.totalLessons ? Math.min(100, Math.round(stats.completed.size / preset.totalLessons * 100)) : 0;
           const dateGroups = (Object.entries(preset.lessonCompletionDates || {}) as [string, string][]).reduce<Record<string, number[]>>((acc, [lesson, date]) => { (acc[date] ||= []).push(Number(lesson)); return acc; }, {});
           const finishLabel = stats.completed.size >= preset.totalLessons ? (stats.completedAt ? `已完成 · ${formatShortDate(stats.completedAt)}` : "已完成") : stats.expectedEnd ? `预计结束 ${formatShortDate(stats.expectedEnd)}` : `还差 ${stats.missing} 课未排`;
-          return <article className={`task-preset-card ${planningPresetId === preset.id ? "planning" : ""}`} key={preset.id} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); movePreset(Number(event.dataTransfer.getData("text/plain")), preset.id); }}><i className="task-preset-drag" draggable title="拖动排序" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(preset.id)); }}>≡</i><div className="task-preset-main"><div><strong>{preset.title}</strong><span>{preset.subject}</span></div><p>编号 {presetStartLesson(preset)}–{presetStartLesson(preset) + preset.totalLessons - 1} · 总课时 {preset.totalLessons} · 已安排 {Math.min(stats.scheduled.size, preset.totalLessons)} · 已完成 {Math.min(stats.completed.size, preset.totalLessons)}</p><div className="task-preset-deadline"><b>{finishLabel}</b>{stats.autoPending ? <span>自动排期 {stats.autoPending} 天</span> : null}</div>{Object.keys(dateGroups).length ? <div className="task-preset-history-summary">{Object.entries(dateGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([date, lessons]) => <span key={date}>{formatShortDate(date)} 第{formatPresetLessonSelection(preset, normalizedLessonNumbers(lessons, preset.totalLessons))}课</span>)}</div> : null}<div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div><div className="task-preset-actions"><button type="button" className="detail" onClick={() => setDetailPresetId(current => current === preset.id ? null : preset.id)}>进度详情</button><button type="button" className="schedule" onClick={() => openSchedulePlanner(preset)}>进度排期</button><button type="button" onClick={() => editPreset(preset)}>修改</button><button type="button" onClick={() => deletePreset(preset)}>删除</button></div></article>;
+          return <article className={`task-preset-card ${planningPresetId === preset.id ? "planning" : ""}`} key={preset.id} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); movePreset(Number(event.dataTransfer.getData("text/plain")), preset.id); }}><i className="task-preset-drag" draggable title="拖动排序" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(preset.id)); }}>≡</i><div className="task-preset-main"><div><strong>{preset.title}</strong><span>{preset.subject}</span></div><p>编号 {presetStartLesson(preset)}–{presetStartLesson(preset) + preset.totalLessons - 1} · 总课时 {preset.totalLessons} · 已安排 {Math.min(stats.scheduled.size, preset.totalLessons)} · 已完成 {Math.min(stats.completed.size, preset.totalLessons)}{preset.followPresetId ? ` · 跟随 ${presets.find(item => item.id === preset.followPresetId)?.title || "其他任务"}` : ""}</p><div className="task-preset-deadline"><b>{finishLabel}</b>{stats.autoPending ? <span>自动排期 {stats.autoPending} 天</span> : null}</div>{Object.keys(dateGroups).length ? <div className="task-preset-history-summary">{Object.entries(dateGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([date, lessons]) => <span key={date}>{formatShortDate(date)} 第{formatPresetLessonSelection(preset, normalizedLessonNumbers(lessons, preset.totalLessons))}课</span>)}</div> : null}<div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div><div className="task-preset-actions"><button type="button" className="detail" onClick={() => setDetailPresetId(current => current === preset.id ? null : preset.id)}>进度详情</button><button type="button" className="schedule" onClick={() => preset.followPresetId ? editPreset(preset) : openSchedulePlanner(preset)}>{preset.followPresetId ? "跟随设置" : "进度排期"}</button><button type="button" onClick={() => editPreset(preset)}>修改</button><button type="button" onClick={() => deletePreset(preset)}>删除</button></div></article>;
         })}</div> : <div className="all-scheduled">还没有预设学习任务。普通课程和复合任务都可按课时管理；复合任务的每一课再拆成言语、资料等固定子任务。</div>}
 
       </section>
