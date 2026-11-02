@@ -6,7 +6,7 @@ type SupervisionState = { delayCount?: number; postponedUntil?: string; reasons?
 type TimeSlot = { start: string; end: string };
 type StudyTaskKind = "course" | "composite";
 type StudySubtask = { id: string; title: string; minutes?: number; order?: number };
-type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; subtaskIds?: string[]; compositeRunId?: string; historyPresetRecord?: boolean; presetAutoPlan?: boolean; followSourcePresetId?: number; migrationHidden?: boolean };
+type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; subtaskIds?: string[]; compositeRunId?: string; historyPresetRecord?: boolean; presetAutoPlan?: boolean; followSourcePresetId?: number; followDateOverride?: boolean; migrationHidden?: boolean };
 type TaskMigrationMarker = { id: number; targetTaskId: number; title: string; subject: string; date: string; targetDate: string; presetId?: number; lessonNumbers?: number[]; completedLessonNumbers?: number[]; originalLessonCount?: number; subtaskIds?: string[]; completedSubtaskIds?: string[]; originalSubtaskCount?: number; sourceTask?: Task; hiddenCompletedTaskId?: number };
 type StudyTaskPreset = { id: number; title: string; subject: string; totalLessons: number; startLesson?: number; order?: number; completedLessons?: number[]; lessonCompletionDates?: Record<string, string>; taskType?: StudyTaskKind; subtasks?: StudySubtask[]; completedSubtasks?: string[]; subtaskCompletionDates?: Record<string, string>; followPresetId?: number; followStartDate?: string };
 type DailyRoutine = { id: number; title: string; subject: string; minutes: number; month: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; completedDates: string[]; skippedDates?: string[]; supervision?: Record<string, SupervisionState> };
@@ -558,14 +558,14 @@ export default function App() {
         const followFloor = normalizedDate(follower.followStartDate || localISO());
         const sourceDates = Array.from(new Set(next.filter(task => task.presetId === source.id && !task.historyPresetRecord && !task.migrationHidden && task.date && normalizedDate(task.date) >= followFloor).map(task => normalizedDate(task.date)))).sort();
         const targetTasks = next.filter(task => task.presetId === follower.id);
-        const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done);
+        const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done && !task.followDateOverride);
         const pendingByDate = new Map(pendingFollow.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
         const completedLessons = new Set<number>([
           ...normalizedLessonNumbers(follower.completedLessons, follower.totalLessons),
           ...normalizedLessonNumbers(Object.keys(follower.lessonCompletionDates || {}).map(Number), follower.totalLessons),
           ...targetTasks.filter(task => task.done).flatMap(task => taskLessonNumbers(task)),
         ]);
-        const occupiedLessons = new Set<number>(targetTasks.filter(task => task.followSourcePresetId !== source.id || task.done).flatMap(task => taskLessonNumbers(task)));
+        const occupiedLessons = new Set<number>(targetTasks.filter(task => task.followSourcePresetId !== source.id || task.done || task.followDateOverride).flatMap(task => taskLessonNumbers(task)));
         const completedFollowDates = new Set(targetTasks.filter(task => task.followSourcePresetId === source.id && task.done && task.date).map(task => normalizedDate(task.date)));
         const availableLessons = Array.from({ length: Math.max(1, follower.totalLessons) }, (_, index) => index + 1).filter(lesson => !completedLessons.has(lesson) && !occupiedLessons.has(lesson));
         const desired: Task[] = [];
@@ -596,7 +596,7 @@ export default function App() {
             migrationHidden: undefined,
           });
         }
-        next = [...next.filter(task => !(task.presetId === follower.id && task.followSourcePresetId === source.id && !task.done)), ...desired];
+        next = [...next.filter(task => !(task.presetId === follower.id && task.followSourcePresetId === source.id && !task.done && !task.followDateOverride)), ...desired];
       }
       return JSON.stringify(next) === JSON.stringify(current) ? current : next;
     });
@@ -1949,7 +1949,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
       const completedMinutes = completed.length && originalMinutes ? Math.max(1, Math.round(originalMinutes * completed.length / totalCount)) : 0;
       const remainingMinutes = originalMinutes ? Math.max(1, originalMinutes - completedMinutes) : 0;
       const { targetId, hiddenId } = makeIds();
-      const targetTask: Task = { ...contextTask, id: targetId, done: false, date: targetDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, remaining), minutes: remainingMinutes || originalMinutes, subtaskIds: remaining, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, migrationHidden: undefined };
+      const targetTask: Task = { ...contextTask, id: targetId, done: false, date: targetDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, remaining), minutes: remainingMinutes || originalMinutes, subtaskIds: remaining, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
       const hiddenCompletedTask: Task | null = completed.length ? { ...contextTask, id: hiddenId, done: true, date: sourceDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, completed), minutes: completedMinutes, subtaskIds: completed, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, presetAutoPlan: undefined, migrationHidden: true } : null;
       const trace = makeCompositeMigrationMarker(contextTask, sourceDate, targetDate, targetId, contextTask.title, remaining, completed, totalCount, hiddenCompletedTask?.id);
       setMigrationMarkers(current => [...current.map(marker => marker.targetTaskId === contextTask.id ? { ...marker, targetTaskId: targetId, targetDate } : marker), trace]);
@@ -1963,7 +1963,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     if (!contextPreset || !contextLessons.length) {
       if (!targetDate) { flash("请选择有效的迁移日期"); return; }
       const { targetId } = makeIds();
-      const targetTask: Task = { ...contextTask, id: targetId, date: targetDate, done: false, migrationHidden: undefined };
+      const targetTask: Task = { ...contextTask, id: targetId, date: targetDate, done: false, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
       const trace = makeMigrationMarker(contextTask, sourceDate, targetDate, targetId, contextTask.title);
       setMigrationMarkers(current => [...current.map(marker => marker.targetTaskId === contextTask.id ? { ...marker, targetTaskId: targetId, targetDate } : marker), trace]);
       setTasks(current => [...current.filter(task => task.id !== contextTask.id), targetTask]);
@@ -1981,7 +1981,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     const completedMinutes = completed.length && originalMinutes ? Math.max(1, Math.round(originalMinutes * completed.length / totalCount)) : 0;
     const remainingMinutes = originalMinutes ? Math.max(1, originalMinutes - completedMinutes) : 0;
     const { targetId, hiddenId } = makeIds();
-    const targetTask: Task = { ...contextTask, id: targetId, done: false, date: targetDate, title: presetTaskTitle(contextPreset, remaining), minutes: remainingMinutes || originalMinutes, lessonNumber: remaining.length === 1 ? remaining[0] : undefined, lessonNumbers: remaining, historyPresetRecord: undefined, migrationHidden: undefined };
+    const targetTask: Task = { ...contextTask, id: targetId, done: false, date: targetDate, title: presetTaskTitle(contextPreset, remaining), minutes: remainingMinutes || originalMinutes, lessonNumber: remaining.length === 1 ? remaining[0] : undefined, lessonNumbers: remaining, historyPresetRecord: undefined, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
     const hiddenCompletedTask: Task | null = completed.length ? { ...contextTask, id: hiddenId, done: true, date: sourceDate, title: presetTaskTitle(contextPreset, completed), minutes: completedMinutes, lessonNumber: completed.length === 1 ? completed[0] : undefined, lessonNumbers: completed, historyPresetRecord: undefined, presetAutoPlan: undefined, migrationHidden: true } : null;
     const trace = makeMigrationMarker(contextTask, sourceDate, targetDate, targetId, contextTask.title, remaining, completed, totalCount, hiddenCompletedTask?.id);
     setMigrationMarkers(current => [...current.map(marker => marker.targetTaskId === contextTask.id ? { ...marker, targetTaskId: targetId, targetDate } : marker), trace]);
