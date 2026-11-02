@@ -544,6 +544,13 @@ export default function App() {
   const [taskPresets, setTaskPresets] = useStoredState<StudyTaskPreset[]>("shore-study-task-presets", []);
   useEffect(() => {
     setTasks(current => {
+      if (!taskPresets.length) {
+        try {
+          const savedPresets = localStorage.getItem("shore-study-task-presets");
+          const parsedPresets = savedPresets ? JSON.parse(savedPresets) : [];
+          if (Array.isArray(parsedPresets) && parsedPresets.length) return current;
+        } catch { /* if storage is malformed, fall through to normal cleanup */ }
+      }
       let persistedMigrationMarkers: TaskMigrationMarker[] = [];
       try {
         const savedMarkers = localStorage.getItem("shore-plan-migration-markers");
@@ -558,6 +565,29 @@ export default function App() {
         const target = task.presetId ? presetMap.get(task.presetId) : undefined;
         return Boolean(target && target.followPresetId === task.followSourcePresetId);
       });
+      for (const marker of persistedMigrationMarkers) {
+        if (next.some(task => task.id === marker.targetTaskId) || !marker.sourceTask) continue;
+        const sourceTask = marker.sourceTask;
+        const preset = marker.presetId !== undefined ? presetMap.get(marker.presetId) : undefined;
+        const lessons = preset ? normalizedLessonNumbers(marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(sourceTask), preset.totalLessons) : (marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(sourceTask));
+        const subtaskIds = preset && presetIsComposite(preset) ? normalizedSubtaskIds(marker.subtaskIds?.length ? marker.subtaskIds : taskSubtaskIds(sourceTask, preset), preset) : marker.subtaskIds;
+        const remainingRatio = marker.originalSubtaskCount && subtaskIds?.length ? subtaskIds.length / marker.originalSubtaskCount : marker.originalLessonCount && lessons.length ? lessons.length / marker.originalLessonCount : 1;
+        const repairedTitle = preset ? (presetIsComposite(preset) && subtaskIds?.length ? compositeLessonTaskTitle(preset, lessons, subtaskIds) : lessons.length ? presetTaskTitle(preset, lessons) : marker.title) : marker.title || sourceTask.title;
+        next.push({
+          ...sourceTask,
+          id: marker.targetTaskId,
+          date: normalizedDate(marker.targetDate),
+          done: false,
+          title: repairedTitle,
+          minutes: Math.max(1, Math.round(Math.max(1, sourceTask.minutes || 1) * remainingRatio)),
+          lessonNumber: lessons.length === 1 ? lessons[0] : sourceTask.lessonNumber,
+          lessonNumbers: lessons.length ? lessons : sourceTask.lessonNumbers,
+          ...(subtaskIds?.length ? { subtaskIds } : {}),
+          historyPresetRecord: undefined,
+          followDateOverride: sourceTask.followSourcePresetId ? true : sourceTask.followDateOverride,
+          migrationHidden: undefined,
+        });
+      }
       let seed = Date.now();
       for (const follower of taskPresets) {
         if (!follower.followPresetId || follower.followPresetId === follower.id) continue;
