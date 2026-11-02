@@ -1579,7 +1579,7 @@ body:has(.month-plan-page) .content{
 
 /* v50: full-width monthly calendar + collapsible task drawer */
 .month-plan-page .month-layout.month-layout-full{
-  display:block;
+  display:block!important;
 }
 .month-plan-page .calendar-panel{
   width:100%;
