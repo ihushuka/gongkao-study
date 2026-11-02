@@ -1825,9 +1825,8 @@ body:has(.month-plan-page) .content{
 .focus-card .focus-task-tags{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
-  grid-auto-rows:60px;
   gap:8px;
-  max-height:196px;
+  max-height:220px;
   overflow-y:auto;
   overflow-x:hidden;
   padding:2px 4px 3px 2px;
@@ -1835,32 +1834,35 @@ body:has(.month-plan-page) .content{
 }
 .focus-card .focus-task-tags button{
   width:100%;
-  height:60px;
   min-width:0;
   max-width:none;
+  height:72px;
   padding:8px 11px;
   display:grid;
   grid-template-rows:minmax(0,1fr) auto;
   align-items:center;
   justify-items:start;
-  gap:3px;
+  gap:4px;
   overflow:hidden;
 }
 .focus-card .focus-task-tags button strong{
   width:100%;
-  max-width:none;
   min-width:0;
-  align-self:center;
+  max-width:none;
   overflow:hidden;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  white-space:normal;
   text-overflow:ellipsis;
-  white-space:nowrap;
   font-size:10px;
   line-height:1.35;
 }
 .focus-card .focus-task-tags button small{
   width:100%;
-  max-width:none;
   min-width:0;
+  max-width:none;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
@@ -1868,8 +1870,8 @@ body:has(.month-plan-page) .content{
   line-height:1.25;
 }
 .focus-card .focus-task-tags button.custom{
-  height:60px;
-  min-height:60px;
+  height:72px;
+  min-height:72px;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -1878,12 +1880,11 @@ body:has(.month-plan-page) .content{
 @media(max-width:520px){
   .focus-card .focus-task-tags{
     grid-template-columns:1fr;
-    grid-auto-rows:58px;
-    max-height:190px;
+    max-height:210px;
   }
   .focus-card .focus-task-tags button,
   .focus-card .focus-task-tags button.custom{
-    height:58px;
-    min-height:58px;
+    height:68px;
+    min-height:68px;
   }
 }
