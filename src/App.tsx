@@ -437,11 +437,13 @@ type UiModuleLayout = {
   padding?: number;
   order?: number;
 };
+type UiFontStyle = "default" | "sans" | "serif" | "handwriting";
 type UiLayoutState = {
   pageWidth: number;
   gap: number;
   radius: number;
   fontScale: number;
+  fontStyle?: UiFontStyle;
   modules: Record<string, UiModuleLayout>;
 };
 type DiscoveredLayoutModule = {
@@ -455,7 +457,7 @@ type DiscoveredLayoutModule = {
   defaultSmallSize: number;
   defaultPadding: number;
 };
-const defaultUiLayoutState: UiLayoutState = { pageWidth: 1320, gap: 22, radius: 0, fontScale: 100, modules: {} };
+const defaultUiLayoutState: UiLayoutState = { pageWidth: 1320, gap: 22, radius: 0, fontScale: 100, fontStyle: "default", modules: {} };
 const layoutGroupClasses = ["metric-grid", "dashboard-grid", "daily-briefing", "study-grid", "analysis-grid", "practice-option-grid", "two-col", "report-grid", "theme-grid", "month-layout"];
 const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 function layoutModuleLabel(element: HTMLElement, index: number) {
@@ -523,7 +525,7 @@ function LayoutEditor({ tab, layout, setLayout, modules, selectedId, setSelected
   return <aside className="layout-editor" aria-label="界面布局设置">
     <div className="layout-editor-head"><div><p className="eyebrow">LAYOUT EDITOR</p><h2>界面布局</h2><span>12格网格 · 设置自动保存在本浏览器</span></div><button aria-label="关闭界面布局" onClick={onClose}>×</button></div>
     <div className="layout-editor-scroll">
-      <section className="layout-editor-section"><h3>全局设置</h3><label><span>页面最大宽度 <b>{layout.pageWidth}px</b></span><input type="range" min="980" max="1600" step="20" value={layout.pageWidth} onChange={e => setLayout(current => ({ ...current, pageWidth: Number(e.target.value) }))} /></label><label><span>模块间距 <b>{layout.gap}px</b></span><input type="range" min="10" max="32" step="1" value={layout.gap} onChange={e => setLayout(current => ({ ...current, gap: Number(e.target.value) }))} /></label><label><span>全局字体缩放 <b>{layout.fontScale}%</b></span><input type="range" min="85" max="120" step="1" value={layout.fontScale} onChange={e => setLayout(current => ({ ...current, fontScale: Number(e.target.value) }))} /></label><label><span>统一卡片圆角 <b>{layout.radius ? `${layout.radius}px` : "沿用原样"}</b></span><input type="range" min="0" max="32" step="2" value={layout.radius} onChange={e => setLayout(current => ({ ...current, radius: Number(e.target.value) }))} /></label></section>
+      <section className="layout-editor-section"><h3>全局设置</h3><label><span>整体字体 <b>{({ default: "默认混排", sans: "清爽黑体", serif: "书卷宋体", handwriting: "手写楷体" } as Record<UiFontStyle, string>)[layout.fontStyle || "default"]}</b></span><select className="layout-font-select" value={layout.fontStyle || "default"} onChange={e => setLayout(current => ({ ...current, fontStyle: e.target.value as UiFontStyle }))}><option value="default">默认混排 · 当前风格</option><option value="sans">清爽黑体 · 简洁现代</option><option value="serif">书卷宋体 · 阅读感更强</option><option value="handwriting">手写楷体 · 更像手账</option></select><small className="layout-font-note">字体使用系统已有中文字体并自动回退，不需要另外安装字体。</small></label><label><span>页面最大宽度 <b>{layout.pageWidth}px</b></span><input type="range" min="980" max="1600" step="20" value={layout.pageWidth} onChange={e => setLayout(current => ({ ...current, pageWidth: Number(e.target.value) }))} /></label><label><span>模块间距 <b>{layout.gap}px</b></span><input type="range" min="10" max="32" step="1" value={layout.gap} onChange={e => setLayout(current => ({ ...current, gap: Number(e.target.value) }))} /></label><label><span>全局字体缩放 <b>{layout.fontScale}%</b></span><input type="range" min="90" max="125" step="1" value={layout.fontScale} onChange={e => setLayout(current => ({ ...current, fontScale: Number(e.target.value) }))} /></label><label><span>统一卡片圆角 <b>{layout.radius ? `${layout.radius}px` : "沿用原样"}</b></span><input type="range" min="0" max="32" step="2" value={layout.radius} onChange={e => setLayout(current => ({ ...current, radius: Number(e.target.value) }))} /></label></section>
       <section className="layout-editor-section"><div className="layout-section-head"><h3>当前模块</h3><small>也可以直接点击页面上的模块</small></div>{modules.length ? <><select className="layout-module-select" value={selected?.id || ""} onChange={e => setSelectedId(e.target.value)}>{modules.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><div className="layout-selected-name"><span>正在调整</span><strong>{selected?.label}</strong></div><label><span>网格宽度 <b>{gridSpan}/12格</b></span><input type="range" min="2" max="12" step="1" value={gridSpan} onChange={e => patchModule({ span: Number(e.target.value) })} /></label><div className="layout-grid-presets">{[3, 4, 6, 8, 9, 12].map(span => <button className={gridSpan === span ? "active" : ""} key={span} onClick={() => patchModule({ span })}>{span}格</button>)}</div><label><span>最小高度 <b>{config.minHeight ? `${config.minHeight}px` : "自动"}</b></span><input type="range" min="0" max="900" step="10" value={config.minHeight ?? 0} onChange={e => patchModule({ minHeight: Number(e.target.value) })} /></label><label><span>标题字号 <b>{config.titleSize ? `${config.titleSize}px` : `原样 ${selected?.defaultTitleSize ?? 17}px`}</b></span><input type="range" min="12" max="34" step="1" value={config.titleSize ?? selected?.defaultTitleSize ?? 17} onChange={e => patchModule({ titleSize: Number(e.target.value) })} /></label><label><span>正文字号 <b>{config.bodySize ? `${config.bodySize}px` : `原样 ${selected?.defaultBodySize ?? 12}px`}</b></span><input type="range" min="9" max="22" step="1" value={config.bodySize ?? selected?.defaultBodySize ?? 12} onChange={e => patchModule({ bodySize: Number(e.target.value) })} /></label><label><span>辅助文字 <b>{config.smallSize ? `${config.smallSize}px` : `原样 ${selected?.defaultSmallSize ?? 10}px`}</b></span><input type="range" min="8" max="18" step="1" value={config.smallSize ?? selected?.defaultSmallSize ?? 10} onChange={e => patchModule({ smallSize: Number(e.target.value) })} /></label><label><span>内部间距 <b>{config.padding ? `${config.padding}px` : `原样 ${selected?.defaultPadding ?? 24}px`}</b></span><input type="range" min="8" max="44" step="1" value={config.padding ?? selected?.defaultPadding ?? 24} onChange={e => patchModule({ padding: Number(e.target.value) })} /></label><div className="layout-order-actions"><button onClick={() => move(-1)}>← 前移</button><button onClick={() => move(1)}>后移 →</button></div><button className="layout-reset-module" onClick={resetCurrent}>恢复当前模块原样</button></> : <div className="layout-empty">当前页面暂未识别到可调整模块。</div>}</section>
       <section className="layout-editor-section layout-reset-section"><button onClick={resetPage}>恢复当前页面原布局</button><button className="danger" onClick={() => { if (window.confirm("确定恢复全部页面为原始布局吗？字体、宽度和排序设置都会清除。")) setLayout(defaultUiLayoutState); }}>恢复全部默认布局</button></section>
     </div>
@@ -743,9 +745,10 @@ export default function App() {
     root.style.setProperty("--ui-page-width", `${clampNumber(uiLayout.pageWidth, 980, 1600)}px`);
     root.style.setProperty("--ui-layout-gap", `${clampNumber(uiLayout.gap, 10, 32)}px`);
     root.style.setProperty("--ui-global-radius", `${clampNumber(uiLayout.radius, 0, 32)}px`);
+    root.dataset.uiFont = uiLayout.fontStyle || "default";
     root.classList.toggle("ui-gap-custom", uiLayout.gap !== 22);
     root.classList.toggle("ui-radius-custom", uiLayout.radius > 0);
-  }, [uiLayout.pageWidth, uiLayout.gap, uiLayout.radius]);
+  }, [uiLayout.pageWidth, uiLayout.gap, uiLayout.radius, uiLayout.fontStyle]);
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const pageRoot = document.querySelector<HTMLElement>(".content > .page-stack");
@@ -2242,10 +2245,16 @@ function StudyTime({ sessions, setSessions, tasks, routines, flash, timer, modul
   const studyModuleDefaults = ["focus", "week", "distribution", "timeband", "heatmap", "manual", "recent"] as const;
   type StudyModuleId = typeof studyModuleDefaults[number];
   const [studyModuleOrder, setStudyModuleOrder] = useStoredState<string[]>("shore-study-page-module-order", [...studyModuleDefaults]);
-  const normalizeStudyModuleOrder = (items: string[]) => { const valid = items.filter((id, index) => studyModuleDefaults.includes(id as StudyModuleId) && items.indexOf(id) === index); return [...valid, ...studyModuleDefaults.filter(id => !valid.includes(id))] as StudyModuleId[]; };
+  const pinnedStudyModuleOrder: StudyModuleId[] = ["focus", "week", "distribution"];
+  const normalizeStudyModuleOrder = (items: string[]) => {
+    const valid = items.filter((id, index) => studyModuleDefaults.includes(id as StudyModuleId) && items.indexOf(id) === index) as StudyModuleId[];
+    const movable = valid.filter(id => !pinnedStudyModuleOrder.includes(id));
+    const missingMovable = studyModuleDefaults.filter(id => !pinnedStudyModuleOrder.includes(id) && !movable.includes(id));
+    return [...pinnedStudyModuleOrder, ...movable, ...missingMovable] as StudyModuleId[];
+  };
   const orderedStudyModules = normalizeStudyModuleOrder(studyModuleOrder);
   const studyModuleLabels: Record<StudyModuleId, string> = { focus: "当前专注", week: "近7天学习时长", distribution: "模块投入分布", timeband: "学习时间段分布", heatmap: "月历学习时长", manual: "补录学习时长", recent: "最近记录" };
-  const pinnedStudyModules = new Set<StudyModuleId>(["focus", "week", "distribution"]);
+  const pinnedStudyModules = new Set<StudyModuleId>(pinnedStudyModuleOrder);
   const reorderStudyModule = (source: string, target: StudyModuleId) => { if (!studyModuleDefaults.includes(source as StudyModuleId) || source === target) return; setStudyModuleOrder(current => { const next = normalizeStudyModuleOrder(current); const from = next.indexOf(source as StudyModuleId), to = next.indexOf(target); if (from < 0 || to < 0) return next; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); };
   const shiftStudyModule = (id: StudyModuleId, direction: -1 | 1) => setStudyModuleOrder(current => { const next = normalizeStudyModuleOrder(current); const from = next.indexOf(id), to = from + direction; if (from < 0 || to < 0 || to >= next.length) return next; [next[from], next[to]] = [next[to], next[from]]; return next; });
   const days = Array.from({ length: 7 }, (_, i) => addDays(i - 6));
