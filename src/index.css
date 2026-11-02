@@ -1771,3 +1771,51 @@ body:has(.month-plan-page) .content{
     min-width:840px;
   }
 }
+
+
+/* v51: cleaner monthly task alignment */
+.month-plan-page .calendar-task{
+  align-items:center;
+  gap:4px;
+}
+.month-plan-page .calendar-task label{
+  align-items:center;
+  gap:5px;
+  line-height:1.32;
+}
+.month-plan-page .calendar-task label i{
+  align-self:center;
+  margin-top:0;
+}
+.month-plan-page .calendar-task label span{
+  line-height:1.32;
+}
+.month-plan-page .calendar-task>button{
+  align-self:center;
+  margin-top:0;
+  opacity:0;
+  transition:opacity .16s ease,background .16s ease;
+}
+.month-plan-page .calendar-task:hover>button{
+  opacity:.72;
+}
+.month-plan-page .calendar-task>button:hover{
+  opacity:1;
+  background:color-mix(in srgb,var(--rose) 34%,transparent);
+}
+.month-plan-page .calendar-task.auto-preset-plan{
+  border-left-color:color-mix(in srgb,var(--primary) 38%,var(--line));
+  padding-left:4px;
+}
+.month-plan-page .day-tasks{
+  scrollbar-color:transparent transparent;
+}
+.month-plan-page .day-tasks::-webkit-scrollbar-thumb{
+  background:transparent;
+}
+.month-plan-page .day-tasks:hover{
+  scrollbar-color:color-mix(in srgb,var(--primary) 28%,transparent) transparent;
+}
+.month-plan-page .day-tasks:hover::-webkit-scrollbar-thumb{
+  background:color-mix(in srgb,var(--primary) 28%,transparent);
+}
