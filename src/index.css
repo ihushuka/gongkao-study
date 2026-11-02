@@ -2400,3 +2400,43 @@ html[data-ui-font="handwriting"] :is(.topbar h1,.page-intro h2,.panel-title h2,.
     font-size:9px;
   }
 }
+
+
+/* v56: prevent study header/status overlap */
+@media(min-width:1101px){
+  body:has(.study-time-page) .topbar{
+    height:auto!important;
+    min-height:86px;
+    padding:10px 0 12px;
+    box-sizing:border-box;
+    align-items:center;
+  }
+  body:has(.study-time-page) .topbar-right{
+    min-height:58px;
+    align-items:center;
+  }
+  body:has(.study-time-page) .top-study-status{
+    box-sizing:border-box;
+    min-height:58px;
+    margin:0;
+    flex:0 0 auto;
+  }
+  body:has(.study-time-page) .layout-edit-toggle{
+    align-self:center;
+  }
+  .study-time-page{
+    position:relative;
+    clear:both;
+    --study-overview-height:clamp(550px,calc(100dvh - 212px),650px);
+  }
+  .study-time-page>.page-intro{
+    position:relative;
+    z-index:0;
+    min-height:56px;
+    padding:9px 20px;
+  }
+  .study-time-page .study-module-sort-toolbar{
+    min-height:32px;
+    padding:3px 10px;
+  }
+}
