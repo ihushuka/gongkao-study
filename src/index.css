@@ -1575,3 +1575,199 @@ body:has(.month-plan-page) .content{
     min-height:165px;
   }
 }
+
+
+/* v50: full-width monthly calendar + collapsible task drawer */
+.month-plan-page .month-layout.month-layout-full{
+  display:block;
+}
+.month-plan-page .calendar-panel{
+  width:100%;
+  padding:18px;
+}
+.month-calendar-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:6px;
+  padding:0 2px 8px;
+}
+.month-calendar-toolbar>div{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+}
+.month-calendar-toolbar span{
+  font-size:10px;
+  color:var(--muted);
+}
+.month-calendar-toolbar strong{
+  font:600 14px Georgia,serif;
+  color:var(--primary-deep);
+}
+.month-add-task-button{
+  min-height:36px;
+  padding:0 14px;
+  border:1px solid color-mix(in srgb,var(--primary) 25%,var(--line));
+  border-radius:11px;
+  background:color-mix(in srgb,var(--primary) 8%,var(--panel));
+  color:var(--primary-deep);
+  font-size:10px;
+  font-weight:750;
+  cursor:pointer;
+}
+.month-add-task-button:hover{
+  background:var(--primary);
+  border-color:var(--primary);
+  color:#fff;
+}
+.month-plan-page .calendar-cell{
+  min-height:154px;
+  padding:9px;
+}
+.month-plan-page .calendar-cell.selected-day{
+  box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--primary) 38%,transparent);
+  background:color-mix(in srgb,var(--primary) 7%,var(--panel));
+}
+.month-plan-page .day-tasks{
+  max-height:112px;
+  gap:5px;
+}
+.month-plan-page .calendar-task label{
+  align-items:start;
+  line-height:1.38;
+}
+.month-plan-page .calendar-task label span{
+  display:-webkit-box;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:normal;
+  overflow-wrap:normal;
+  word-break:break-word;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  line-height:1.38;
+}
+.month-plan-page .calendar-task .migration-trace-main>span{
+  display:-webkit-box;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:normal;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  line-height:1.3;
+}
+.month-drawer-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:1240;
+  border:0;
+  background:rgba(35,39,35,.18);
+  backdrop-filter:blur(2px);
+  cursor:default;
+}
+.month-task-drawer{
+  position:fixed;
+  z-index:1250;
+  top:18px;
+  right:18px;
+  bottom:18px;
+  width:min(520px,calc(100vw - 36px));
+  overflow:auto;
+  border:1px solid color-mix(in srgb,var(--primary) 18%,var(--line));
+  border-radius:22px;
+  background:color-mix(in srgb,var(--panel) 98%,var(--page));
+  box-shadow:0 24px 60px rgba(41,45,40,.20);
+  scrollbar-width:thin;
+  overscroll-behavior:contain;
+}
+.month-task-drawer-head{
+  position:sticky;
+  top:0;
+  z-index:4;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 98%,var(--page));
+  backdrop-filter:blur(10px);
+}
+.month-task-drawer-head>div{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.month-task-drawer-head small{
+  font-size:9px;
+  letter-spacing:.14em;
+  color:var(--primary);
+  font-weight:800;
+}
+.month-task-drawer-head strong{
+  font-family:serif;
+  font-size:18px;
+}
+.month-task-drawer-head span{
+  font-size:10px;
+  color:var(--muted);
+}
+.month-task-drawer-head>button{
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border:0;
+  border-radius:10px;
+  background:color-mix(in srgb,var(--primary) 7%,var(--page));
+  color:var(--muted);
+  font-size:18px;
+  cursor:pointer;
+}
+.month-task-drawer .month-task-form{
+  margin:0;
+  padding:18px 20px 8px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.month-task-drawer .clear-plan-panel{
+  margin:8px 20px 20px;
+  box-shadow:none;
+}
+@media(max-width:1180px){
+  .month-plan-page .month-layout.month-layout-full{
+    display:block;
+  }
+  .month-plan-page .calendar-cell{
+    min-height:150px;
+  }
+  .month-plan-page .day-tasks{
+    max-height:108px;
+  }
+}
+@media(max-width:760px){
+  .month-calendar-toolbar{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .month-add-task-button{
+    width:100%;
+  }
+  .month-task-drawer{
+    top:8px;
+    right:8px;
+    bottom:8px;
+    width:calc(100vw - 16px);
+    border-radius:18px;
+  }
+  .month-plan-page .calendar-week,
+  .month-plan-page .calendar-grid{
+    min-width:840px;
+  }
+}
