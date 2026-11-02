@@ -544,8 +544,16 @@ export default function App() {
   const [taskPresets, setTaskPresets] = useStoredState<StudyTaskPreset[]>("shore-study-task-presets", []);
   useEffect(() => {
     setTasks(current => {
+      let persistedMigrationMarkers: TaskMigrationMarker[] = [];
+      try {
+        const savedMarkers = localStorage.getItem("shore-plan-migration-markers");
+        const parsedMarkers = savedMarkers ? JSON.parse(savedMarkers) : [];
+        if (Array.isArray(parsedMarkers)) persistedMigrationMarkers = parsedMarkers as TaskMigrationMarker[];
+      } catch { /* keep sync resilient if old storage is malformed */ }
+      const protectedMigrationTargetIds = new Set(persistedMigrationMarkers.map(marker => Number(marker.targetTaskId)).filter(Number.isFinite));
       const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
-      let next = current.filter(task => {
+      let next = current.map(task => protectedMigrationTargetIds.has(task.id) && task.followSourcePresetId && !task.followDateOverride ? { ...task, followDateOverride: true } : task).filter(task => {
+        if (protectedMigrationTargetIds.has(task.id)) return true;
         if (!task.followSourcePresetId || task.done) return true;
         const target = task.presetId ? presetMap.get(task.presetId) : undefined;
         return Boolean(target && target.followPresetId === task.followSourcePresetId);
@@ -558,19 +566,21 @@ export default function App() {
         const followFloor = normalizedDate(follower.followStartDate || localISO());
         const sourceDates = Array.from(new Set(next.filter(task => task.presetId === source.id && !task.historyPresetRecord && !task.migrationHidden && task.date && normalizedDate(task.date) >= followFloor).map(task => normalizedDate(task.date)))).sort();
         const targetTasks = next.filter(task => task.presetId === follower.id);
-        const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done && !task.followDateOverride);
+        const migratedSourceDates = new Set(persistedMigrationMarkers.filter(marker => marker.sourceTask?.presetId === follower.id && marker.sourceTask?.followSourcePresetId === source.id).map(marker => normalizedDate(marker.date)));
+        const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done && !task.followDateOverride && !protectedMigrationTargetIds.has(task.id));
         const pendingByDate = new Map(pendingFollow.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
         const completedLessons = new Set<number>([
           ...normalizedLessonNumbers(follower.completedLessons, follower.totalLessons),
           ...normalizedLessonNumbers(Object.keys(follower.lessonCompletionDates || {}).map(Number), follower.totalLessons),
           ...targetTasks.filter(task => task.done).flatMap(task => taskLessonNumbers(task)),
         ]);
-        const occupiedLessons = new Set<number>(targetTasks.filter(task => task.followSourcePresetId !== source.id || task.done || task.followDateOverride).flatMap(task => taskLessonNumbers(task)));
+        const occupiedLessons = new Set<number>(targetTasks.filter(task => task.followSourcePresetId !== source.id || task.done || task.followDateOverride || protectedMigrationTargetIds.has(task.id)).flatMap(task => taskLessonNumbers(task)));
         const completedFollowDates = new Set(targetTasks.filter(task => task.followSourcePresetId === source.id && task.done && task.date).map(task => normalizedDate(task.date)));
         const availableLessons = Array.from({ length: Math.max(1, follower.totalLessons) }, (_, index) => index + 1).filter(lesson => !completedLessons.has(lesson) && !occupiedLessons.has(lesson));
         const desired: Task[] = [];
         let lessonOffset = 0;
         for (const date of sourceDates) {
+          if (migratedSourceDates.has(date)) continue;
           if (completedFollowDates.has(date)) continue;
           const lesson = availableLessons[lessonOffset++];
           if (!lesson) break;
@@ -596,7 +606,7 @@ export default function App() {
             migrationHidden: undefined,
           });
         }
-        next = [...next.filter(task => !(task.presetId === follower.id && task.followSourcePresetId === source.id && !task.done && !task.followDateOverride)), ...desired];
+        next = [...next.filter(task => !(task.presetId === follower.id && task.followSourcePresetId === source.id && !task.done && !task.followDateOverride && !protectedMigrationTargetIds.has(task.id))), ...desired];
       }
       return JSON.stringify(next) === JSON.stringify(current) ? current : next;
     });
