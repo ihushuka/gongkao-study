@@ -765,7 +765,7 @@ export default function App() {
       const discovered: DiscoveredLayoutModule[] = [];
       const directModuleIds: string[] = [];
       const applyVisualSettings = (element: HTMLElement, item: DiscoveredLayoutModule) => {
-        const config = uiLayout.modules[item.id] || {}, scale = clampNumber(uiLayout.fontScale, 85, 120) / 100;
+        const config = uiLayout.modules[item.id] || {}, scale = clampNumber(uiLayout.fontScale, 90, 125) / 100;
         element.dataset.uiModule = item.id; element.dataset.uiLabel = item.label; element.dataset.uiParent = item.parentKey;
         if ((config.minHeight || 0) > 0) element.style.minHeight = `${clampNumber(config.minHeight || 0, 0, 900)}px`;
         if (config.padding !== undefined) { element.classList.add("ui-padding-custom"); element.style.setProperty("--ui-module-padding", `${clampNumber(config.padding, 10, 40)}px`); }
