@@ -1888,3 +1888,82 @@ body:has(.month-plan-page) .content{
     min-height:68px;
   }
 }
+
+
+/* v53: balanced study-time overview layout */
+.study-reorder-focus{
+  grid-column:1 / span 4!important;
+  grid-row:1 / span 2;
+  align-self:stretch;
+}
+.study-reorder-week{
+  grid-column:5 / -1!important;
+  grid-row:1;
+}
+.study-reorder-distribution{
+  grid-column:5 / -1!important;
+  grid-row:2;
+}
+.study-reorder-focus>.panel{
+  height:100%;
+}
+.study-reorder-week>.panel,
+.study-reorder-distribution>.panel{
+  height:auto;
+}
+.study-reorder-distribution .horizontal-bars{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px 22px;
+}
+.study-reorder-distribution .horizontal-bars>div{
+  display:grid;
+  grid-template-columns:72px minmax(0,1fr) 44px;
+  gap:9px;
+  align-items:center;
+  min-width:0;
+  padding:0;
+}
+.study-reorder-distribution .horizontal-bars>div>span{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.study-reorder-distribution .horizontal-bars>div>div{
+  min-width:0;
+}
+.study-reorder-distribution .horizontal-bars>div>strong{
+  text-align:right;
+  white-space:nowrap;
+}
+.study-reorder-distribution .distribution-month-row{
+  margin-bottom:12px;
+}
+.study-reorder-focus .study-module-dragbar>button,
+.study-reorder-week .study-module-dragbar>button,
+.study-reorder-distribution .study-module-dragbar>button{
+  cursor:default;
+}
+.study-reorder-focus .study-module-dragbar>span,
+.study-reorder-week .study-module-dragbar>span,
+.study-reorder-distribution .study-module-dragbar>span{
+  opacity:.38;
+  pointer-events:none;
+}
+@media(max-width:1100px){
+  .study-reorder-focus,
+  .study-reorder-week,
+  .study-reorder-distribution{
+    grid-column:1 / -1!important;
+    grid-row:auto;
+  }
+  .study-reorder-focus>.panel{
+    height:auto;
+  }
+}
+@media(max-width:760px){
+  .study-reorder-distribution .horizontal-bars{
+    grid-template-columns:1fr;
+    gap:11px;
+  }
+}
