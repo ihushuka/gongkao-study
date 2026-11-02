@@ -566,9 +566,22 @@ export default function App() {
         return Boolean(target && target.followPresetId === task.followSourcePresetId);
       });
       for (const marker of persistedMigrationMarkers) {
-        if (next.some(task => task.id === marker.targetTaskId) || !marker.sourceTask) continue;
-        const sourceTask = marker.sourceTask;
+        if (next.some(task => task.id === marker.targetTaskId)) continue;
         const preset = marker.presetId !== undefined ? presetMap.get(marker.presetId) : undefined;
+        const sourceTask: Task = marker.sourceTask || {
+          id: marker.targetTaskId,
+          title: marker.title,
+          subject: marker.subject,
+          minutes: 45,
+          done: false,
+          date: marker.date,
+          presetId: marker.presetId,
+          lessonNumber: marker.lessonNumbers?.length === 1 ? marker.lessonNumbers[0] : undefined,
+          lessonNumbers: marker.lessonNumbers,
+          subtaskIds: marker.subtaskIds,
+          presetAutoPlan: Boolean(preset?.followPresetId),
+          followSourcePresetId: preset?.followPresetId,
+        };
         const lessons = preset ? normalizedLessonNumbers(marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(sourceTask), preset.totalLessons) : (marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(sourceTask));
         const subtaskIds = preset && presetIsComposite(preset) ? normalizedSubtaskIds(marker.subtaskIds?.length ? marker.subtaskIds : taskSubtaskIds(sourceTask, preset), preset) : marker.subtaskIds;
         const remainingRatio = marker.originalSubtaskCount && subtaskIds?.length ? subtaskIds.length / marker.originalSubtaskCount : marker.originalLessonCount && lessons.length ? lessons.length / marker.originalLessonCount : 1;
@@ -596,7 +609,11 @@ export default function App() {
         const followFloor = normalizedDate(follower.followStartDate || localISO());
         const sourceDates = Array.from(new Set(next.filter(task => task.presetId === source.id && !task.historyPresetRecord && !task.migrationHidden && task.date && normalizedDate(task.date) >= followFloor).map(task => normalizedDate(task.date)))).sort();
         const targetTasks = next.filter(task => task.presetId === follower.id);
-        const migratedSourceDates = new Set(persistedMigrationMarkers.filter(marker => marker.sourceTask?.presetId === follower.id && marker.sourceTask?.followSourcePresetId === source.id).map(marker => normalizedDate(marker.date)));
+        const migratedSourceDates = new Set(persistedMigrationMarkers.filter(marker => {
+          const markerPresetId = marker.sourceTask?.presetId ?? marker.presetId;
+          const markerFollowSourceId = marker.sourceTask?.followSourcePresetId ?? (markerPresetId !== undefined ? presetMap.get(markerPresetId)?.followPresetId : undefined);
+          return markerPresetId === follower.id && markerFollowSourceId === source.id;
+        }).map(marker => normalizedDate(marker.date)));
         const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done && !task.followDateOverride && !protectedMigrationTargetIds.has(task.id));
         const pendingByDate = new Map(pendingFollow.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
         const completedLessons = new Set<number>([
@@ -1847,9 +1864,21 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
           }
           continue;
         }
-        const source = marker.sourceTask;
-        if (!source) continue;
         const preset = marker.presetId !== undefined ? taskPresets.find(item => item.id === marker.presetId) : undefined;
+        const source: Task = marker.sourceTask || {
+          id: marker.targetTaskId,
+          title: marker.title,
+          subject: marker.subject,
+          minutes: 45,
+          done: false,
+          date: marker.date,
+          presetId: marker.presetId,
+          lessonNumber: marker.lessonNumbers?.length === 1 ? marker.lessonNumbers[0] : undefined,
+          lessonNumbers: marker.lessonNumbers,
+          subtaskIds: marker.subtaskIds,
+          presetAutoPlan: Boolean(preset?.followPresetId),
+          followSourcePresetId: preset?.followPresetId,
+        };
         const lessons = preset ? normalizedLessonNumbers(marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(source), preset.totalLessons) : (marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(source));
         const subtaskIds = preset && presetIsComposite(preset) ? normalizedSubtaskIds(marker.subtaskIds?.length ? marker.subtaskIds : taskSubtaskIds(source, preset), preset) : marker.subtaskIds;
         const remainingRatio = marker.originalSubtaskCount && subtaskIds?.length ? subtaskIds.length / marker.originalSubtaskCount : marker.originalLessonCount && lessons.length ? lessons.length / marker.originalLessonCount : 1;
