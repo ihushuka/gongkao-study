@@ -1802,6 +1802,48 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   const [contextCompletedLessons, setContextCompletedLessons] = useState<number[]>([]), [contextCompletedSubtaskIds, setContextCompletedSubtaskIds] = useState<string[]>([]), [contextMoveDate, setContextMoveDate] = useState("");
   const [migrationMarkers, setMigrationMarkers] = useStoredState<TaskMigrationMarker[]>("shore-plan-migration-markers", []);
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
+  useEffect(() => {
+    if (!migrationMarkers.length) return;
+    setTasks(current => {
+      let changed = false;
+      const next = [...current];
+      for (const marker of migrationMarkers) {
+        const existingIndex = next.findIndex(task => task.id === marker.targetTaskId);
+        if (existingIndex >= 0) {
+          const existing = next[existingIndex];
+          if (existing.followSourcePresetId && !existing.followDateOverride) {
+            next[existingIndex] = { ...existing, followDateOverride: true };
+            changed = true;
+          }
+          continue;
+        }
+        const source = marker.sourceTask;
+        if (!source) continue;
+        const preset = marker.presetId !== undefined ? taskPresets.find(item => item.id === marker.presetId) : undefined;
+        const lessons = preset ? normalizedLessonNumbers(marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(source), preset.totalLessons) : (marker.lessonNumbers?.length ? marker.lessonNumbers : taskLessonNumbers(source));
+        const subtaskIds = preset && presetIsComposite(preset) ? normalizedSubtaskIds(marker.subtaskIds?.length ? marker.subtaskIds : taskSubtaskIds(source, preset), preset) : marker.subtaskIds;
+        const remainingRatio = marker.originalSubtaskCount && subtaskIds?.length ? subtaskIds.length / marker.originalSubtaskCount : marker.originalLessonCount && lessons.length ? lessons.length / marker.originalLessonCount : 1;
+        const repairedTitle = preset ? (presetIsComposite(preset) && subtaskIds?.length ? compositeLessonTaskTitle(preset, lessons, subtaskIds) : lessons.length ? presetTaskTitle(preset, lessons) : marker.title) : marker.title || source.title;
+        const repairedMinutes = Math.max(1, Math.round(Math.max(1, source.minutes || 1) * remainingRatio));
+        next.push({
+          ...source,
+          id: marker.targetTaskId,
+          date: normalizedDate(marker.targetDate),
+          done: false,
+          title: repairedTitle,
+          minutes: repairedMinutes,
+          lessonNumber: lessons.length === 1 ? lessons[0] : source.lessonNumber,
+          lessonNumbers: lessons.length ? lessons : source.lessonNumbers,
+          ...(subtaskIds?.length ? { subtaskIds } : {}),
+          historyPresetRecord: undefined,
+          followDateOverride: source.followSourcePresetId ? true : source.followDateOverride,
+          migrationHidden: undefined,
+        });
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [migrationMarkers, taskPresets, setTasks]);
   const orderedTaskPresets = [...taskPresets].sort((a, b) => (a.order ?? a.id) - (b.order ?? b.id));
   const selectedPreset = orderedTaskPresets.find(item => String(item.id) === selectedPresetId);
   const presetLessonStatus = (preset: StudyTaskPreset) => {
