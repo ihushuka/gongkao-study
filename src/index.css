@@ -1,3 +1,14 @@
+@import url("https://fontsapi.zeoseven.com/256/main/result.css");
+@import url("https://fontsapi.zeoseven.com/285/main/result.css");
+@import url("https://fontsapi.zeoseven.com/582/main/result.css");
+@import url("https://fontsapi.zeoseven.com/252/main/result.css");
+@import url("https://fontsapi.zeoseven.com/702/main/result.css");
+@import url("https://fontsapi.zeoseven.com/943/main/result.css");
+@import url("https://fontsapi.zeoseven.com/251/main/result.css");
+@import url("https://fontsapi.zeoseven.com/104/main/result.css");
+@import url("https://fontsapi.zeoseven.com/701/main/result.css");
+@import url("https://fontsapi.zeoseven.com/96/main/result.css");
+
 :root { --page:#f4f0e8; --panel:#fbf8f2; --ink:#3e433e; --muted:#7b817b; --line:rgba(62,67,62,.12); --primary:#6f8271; --primary-deep:#526556; --accent:#e5a48d; --sage:#dce5d8; --peach:#f2ddd2; --lilac:#e3ddea; --rose:#eedadd; --shadow:0 14px 35px rgba(76,67,52,.07); }
 *{box-sizing:border-box} html,body{margin:0;min-height:100%;background:var(--page);color:var(--ink);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif} button,input,select{font:inherit} button{color:inherit}.app-shell{min-height:100vh;display:grid;grid-template-columns:238px minmax(0,1fr);background:radial-gradient(circle at 90% 5%,color-mix(in srgb,var(--accent) 17%,transparent),transparent 28%),var(--page)}
 .sidebar{position:sticky;top:0;height:100vh;padding:28px 20px;background:color-mix(in srgb,var(--panel) 88%,transparent);border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:30;backdrop-filter:blur(16px)}.brand{display:flex;align-items:center;gap:12px;padding:0 8px 30px}.brand-seal{width:40px;height:40px;border-radius:14px;background:var(--primary);color:#fff;display:grid;place-items:center;font-family:serif;font-size:20px;box-shadow:0 8px 18px color-mix(in srgb,var(--primary) 25%,transparent)}.brand strong{font-family:serif;font-size:20px;letter-spacing:.08em}.brand small{display:block;margin-top:3px;font-size:10px;letter-spacing:.18em;color:var(--muted)}nav{display:flex;flex-direction:column;gap:6px}nav button{height:46px;border:0;background:transparent;border-radius:14px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer;color:var(--muted);transition:.2s}nav button span{width:26px;height:26px;border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;font-family:serif;font-size:12px}nav button:hover{background:color-mix(in srgb,var(--primary) 7%,transparent);color:var(--ink)}nav button.active{background:color-mix(in srgb,var(--primary) 13%,var(--panel));color:var(--primary-deep);font-weight:700}nav button.active span{background:var(--primary);color:white;border-color:transparent}.sidebar-foot{margin-top:auto;border-radius:18px;padding:16px;background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 16%,var(--panel)),var(--panel));border:1px solid var(--line)}.streak{display:flex;align-items:end;justify-content:space-between}.streak span{font-size:12px;color:var(--muted)}.streak strong{font-family:serif;font-size:28px}.streak small{font-size:11px}.sidebar-foot p{margin:9px 0 0;font-size:11px;color:var(--muted)}
@@ -2439,4 +2450,182 @@ html[data-ui-font="handwriting"] :is(.topbar h1,.page-intro h2,.panel-title h2,.
     min-height:32px;
     padding:3px 10px;
   }
+}
+
+
+/* v57: selected web fonts + compact flip study timer */
+html[data-ui-font="huiwen"]{
+  --ui-font-family:"Huiwen-mincho","Songti SC","STSong","SimSun",serif;
+}
+html[data-ui-font="source-serif-bold"]{
+  --ui-font-family:"Noto Serif CJK","Noto Serif CJK SC","Source Han Serif SC","Songti SC",serif;
+}
+html[data-ui-font="ar-kaiti"]{
+  --ui-font-family:"gkai00mp","AR PL KaitiM GB","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="jason2"]{
+  --ui-font-family:"JasonHandwriting2","清松手寫體2","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="nanifont-light"]{
+  --ui-font-family:"NaniFont","何某手寫體","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="jason8"]{
+  --ui-font-family:"JasonHandwriting8","清松手寫體8","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="jason3"]{
+  --ui-font-family:"清松手寫體3","JasonHandwriting3","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="jason5"]{
+  --ui-font-family:"JasonHandwriting5","清松手寫體5","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="naikai-light"]{
+  --ui-font-family:"NaikaiFont","內海字體","Kaiti SC","KaiTi",serif;
+}
+html[data-ui-font="chenyu-thin"]{
+  --ui-font-family:"辰宇落雁體 Thin","ChenYuluoyan","Kaiti SC","KaiTi",serif;
+}
+
+html[data-ui-font]:not([data-ui-font="default"]) body,
+html[data-ui-font]:not([data-ui-font="default"]) button,
+html[data-ui-font]:not([data-ui-font="default"]) input,
+html[data-ui-font]:not([data-ui-font="default"]) select,
+html[data-ui-font]:not([data-ui-font="default"]) textarea{
+  font-family:var(--ui-font-family);
+}
+html[data-ui-font]:not([data-ui-font="default"]) :is(
+  h1,h2,h3,h4,blockquote,
+  .brand strong,.brand-seal,nav button span,
+  .topbar h1,.page-intro h2,.panel-title h2,.heatmap-head h2,.briefing-head h2,
+  .study-today strong,.metric-card strong,.countdown strong
+){
+  font-family:var(--ui-font-family)!important;
+}
+html[data-ui-font="source-serif-bold"] body{font-weight:600}
+html[data-ui-font="nanifont-light"] body,
+html[data-ui-font="naikai-light"] body{font-weight:300}
+
+.focus-card .focus-flip-clock{
+  width:min(310px,100%);
+  height:88px;
+  min-height:88px;
+  margin:0 auto 8px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+}
+.focus-card .focus-flip-clock.running{
+  animation:none;
+}
+.focus-card .focus-clock-status{
+  display:block;
+  width:100%;
+  max-width:285px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.25;
+  text-align:center;
+}
+.flip-clock{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  height:50px;
+  perspective:700px;
+}
+.flip-clock em{
+  margin:0 -1px;
+  color:color-mix(in srgb,var(--ink) 60%,var(--muted));
+  font:600 22px/1 Georgia,serif;
+  font-style:normal;
+}
+.flip-unit{
+  position:relative;
+  width:58px;
+  height:46px;
+  overflow:hidden;
+  border:1px solid color-mix(in srgb,var(--ink) 10%,transparent);
+  border-radius:10px;
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb,var(--ink) 88%,var(--primary)) 0 49.5%,
+      color-mix(in srgb,var(--ink) 82%,var(--primary)) 50% 100%);
+  color:#fffdf9;
+  display:grid;
+  place-items:center;
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.12),
+    inset 0 -1px rgba(0,0,0,.18),
+    0 5px 12px rgba(51,45,55,.12);
+  transform-origin:center;
+  animation:flipTick .34s cubic-bezier(.2,.72,.28,1);
+}
+.flip-unit::before{
+  content:"";
+  position:absolute;
+  inset:50% 0 auto;
+  height:1px;
+  background:rgba(0,0,0,.32);
+  box-shadow:0 1px rgba(255,255,255,.08);
+  z-index:2;
+}
+.flip-unit::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(to bottom,rgba(255,255,255,.05),transparent 42%,rgba(0,0,0,.08));
+  pointer-events:none;
+}
+.flip-unit b{
+  position:relative;
+  z-index:1;
+  font:600 24px/1 ui-monospace,"SFMono-Regular","Cascadia Mono","Consolas",monospace;
+  letter-spacing:.04em;
+  transform:translateY(-1px);
+}
+@keyframes flipTick{
+  0%{transform:rotateX(-18deg) scaleY(.94);filter:brightness(.88)}
+  65%{transform:rotateX(4deg) scaleY(1.01);filter:brightness(1.03)}
+  100%{transform:rotateX(0) scaleY(1);filter:brightness(1)}
+}
+
+.focus-card .focus-task-tags{
+  max-height:188px;
+}
+@media(min-width:1101px){
+  .study-reorder-focus .focus-clock{
+    width:min(310px,100%);
+    height:88px;
+    min-height:88px;
+    margin:0 auto 8px;
+  }
+  .study-reorder-focus .focus-clock span{
+    font-size:10px;
+  }
+  .study-reorder-focus .focus-task-tags{
+    grid-auto-rows:58px;
+    max-height:186px;
+  }
+}
+@media(max-width:520px){
+  .focus-card .focus-flip-clock{
+    width:100%;
+    height:84px;
+    min-height:84px;
+  }
+  .flip-unit{
+    width:54px;
+    height:44px;
+  }
+  .flip-unit b{font-size:22px}
 }
