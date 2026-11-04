@@ -2832,3 +2832,275 @@ html[data-ui-font="naikai-light"] body{font-weight:300}
     justify-self:stretch;
   }
 }
+
+
+/* v60: monthly-plan cleanup + one-screen study record workspace */
+.month-plan-page > .routine-panel{
+  margin-top:0;
+}
+
+/* The record workspace is fixed as:
+   left = compact heatmap + recent records, right = manual study entry. */
+@media(min-width:1101px){
+  .study-time-page .study-reorder-board{
+    grid-template-rows:
+      calc((var(--study-overview-height) - var(--study-module-gap))/2)
+      calc((var(--study-overview-height) - var(--study-module-gap))/2)
+      352px
+      214px
+      auto;
+    align-items:stretch;
+  }
+
+  .study-time-page .study-reorder-heatmap{
+    grid-column:1 / span 6!important;
+    grid-row:3!important;
+    min-height:0!important;
+    padding-top:0;
+    align-self:stretch;
+  }
+  .study-time-page .study-reorder-recent{
+    grid-column:1 / span 6!important;
+    grid-row:4!important;
+    min-height:0!important;
+    padding-top:0;
+    align-self:stretch;
+  }
+  .study-time-page .study-reorder-manual{
+    grid-column:7 / -1!important;
+    grid-row:3 / span 2!important;
+    min-height:0!important;
+    padding-top:0;
+    align-self:stretch;
+  }
+  .study-time-page .study-reorder-timeband{
+    grid-column:1 / -1!important;
+    grid-row:5!important;
+  }
+
+  .study-time-page .study-reorder-heatmap .study-module-dragbar,
+  .study-time-page .study-reorder-recent .study-module-dragbar,
+  .study-time-page .study-reorder-manual .study-module-dragbar{
+    display:none;
+  }
+
+  .study-time-page .study-reorder-heatmap>.panel,
+  .study-time-page .study-reorder-recent>.panel,
+  .study-time-page .study-reorder-manual>form.panel{
+    height:100%;
+    min-height:0;
+    overflow:hidden;
+    padding:15px 17px;
+    border-radius:22px;
+  }
+
+  /* Compact monthly study heatmap. Exact duration remains available in the tooltip. */
+  .study-reorder-heatmap .heatmap-head{
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  .study-reorder-heatmap .heatmap-head>div{
+    min-width:0;
+  }
+  .study-reorder-heatmap .heatmap-head .eyebrow{
+    display:none;
+  }
+  .study-reorder-heatmap .heatmap-head h2{
+    margin:0 0 2px;
+    font-size:17px;
+  }
+  .study-reorder-heatmap .heatmap-head span{
+    display:block;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:9px;
+  }
+  .study-reorder-heatmap .heatmap-head .month-picker{
+    width:148px;
+    min-width:148px;
+    height:34px!important;
+    padding:0 8px!important;
+    border-radius:10px!important;
+    font-size:10px;
+  }
+  .study-reorder-heatmap .heatmap-summary{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;
+    margin-bottom:7px;
+  }
+  .study-reorder-heatmap .heatmap-summary>div{
+    min-height:42px;
+    padding:7px 9px;
+    border-radius:11px;
+    gap:1px;
+  }
+  .study-reorder-heatmap .heatmap-summary strong{
+    font-size:15px;
+  }
+  .study-reorder-heatmap .heatmap-summary span{
+    font-size:8px;
+  }
+  .study-reorder-heatmap .heatmap-week,
+  .study-reorder-heatmap .study-heatmap{
+    gap:4px;
+  }
+  .study-reorder-heatmap .heatmap-week span{
+    padding:1px 0 4px;
+    font-size:8px;
+  }
+  .study-reorder-heatmap .heat-day{
+    height:31px;
+    padding:4px 5px;
+    border-radius:8px;
+    justify-content:center;
+  }
+  .study-reorder-heatmap .heat-day span{
+    font-size:9px;
+  }
+  .study-reorder-heatmap .heat-day strong{
+    display:none;
+  }
+  .study-reorder-heatmap .heat-legend{
+    margin-top:6px;
+    gap:4px;
+    font-size:8px;
+  }
+  .study-reorder-heatmap .heat-legend i{
+    width:11px;
+    height:11px;
+    border-radius:3px;
+  }
+  .study-reorder-heatmap .heat-legend small{
+    display:none;
+  }
+  .study-reorder-heatmap .day-history{
+    display:none;
+  }
+
+  /* Recent records directly below the heatmap. */
+  .study-reorder-recent .study-recent-panel{
+    padding-top:13px;
+  }
+  .study-reorder-recent .panel-title{
+    margin-bottom:4px;
+  }
+  .study-reorder-recent .panel-title h2{
+    font-size:16px;
+  }
+  .study-reorder-recent .session-list>div{
+    grid-template-columns:54px minmax(0,1fr) 48px 70px;
+    gap:7px;
+    min-height:31px;
+    padding:5px 0;
+    font-size:9px;
+  }
+  .study-reorder-recent .session-list>div>span:first-child{
+    font-size:9px;
+  }
+  .study-reorder-recent .session-list>div>span:first-child small{
+    display:none;
+  }
+  .study-reorder-recent .session-task-copy{
+    gap:1px;
+  }
+  .study-reorder-recent .session-task-copy strong{
+    font-size:9px;
+  }
+  .study-reorder-recent .session-task-copy small{
+    font-size:8px;
+  }
+  .study-reorder-recent .session-list em{
+    font-size:9px;
+  }
+  .study-reorder-recent .row-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:2px;
+  }
+  .study-reorder-recent .row-actions button{
+    padding:3px 4px;
+    font-size:8px;
+  }
+
+  /* Manual entry fills the right column without exceeding the workspace height. */
+  .study-reorder-manual .study-manual-panel{
+    display:flex;
+    flex-direction:column;
+  }
+  .study-reorder-manual .panel-title{
+    margin-bottom:7px;
+  }
+  .study-reorder-manual .panel-title h2{
+    font-size:17px;
+  }
+  .study-reorder-manual .manual-task-label{
+    margin-bottom:6px;
+    font-size:9px;
+  }
+  .study-reorder-manual .focus-task-tags.manual{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+    max-height:118px;
+    margin:5px 0 8px;
+    padding:1px 2px 2px;
+  }
+  .study-reorder-manual .focus-task-tags.manual button,
+  .study-reorder-manual .focus-task-tags.manual button.custom{
+    height:52px;
+    min-height:52px;
+    padding:6px 8px;
+  }
+  .study-reorder-manual .focus-task-tags.manual button strong{
+    font-size:9px;
+    line-height:1.25;
+  }
+  .study-reorder-manual .focus-task-tags.manual button small{
+    font-size:8px;
+  }
+  .study-reorder-manual .form-grid{
+    gap:7px 9px;
+  }
+  .study-reorder-manual .form-card label{
+    gap:4px;
+    margin-bottom:5px;
+    font-size:9px;
+  }
+  .study-reorder-manual .form-card input,
+  .study-reorder-manual .form-card select{
+    height:34px;
+    border-radius:9px;
+    padding:0 9px;
+    font-size:9px;
+  }
+  .study-reorder-manual .form-grid label small{
+    display:none;
+  }
+  .study-reorder-manual .primary-button{
+    min-height:34px;
+    height:34px;
+    margin-top:auto;
+    font-size:9px;
+  }
+  .study-reorder-manual .cancel-edit{
+    min-height:32px;
+    margin-top:5px;
+  }
+}
+
+@media(max-width:1100px){
+  .study-time-page .study-reorder-heatmap,
+  .study-time-page .study-reorder-recent,
+  .study-time-page .study-reorder-manual,
+  .study-time-page .study-reorder-timeband{
+    grid-column:1 / -1!important;
+    grid-row:auto!important;
+    padding-top:31px;
+  }
+  .study-time-page .study-reorder-heatmap .study-module-dragbar,
+  .study-time-page .study-reorder-recent .study-module-dragbar,
+  .study-time-page .study-reorder-manual .study-module-dragbar{
+    display:flex;
+  }
+}
