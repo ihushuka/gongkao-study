@@ -3104,3 +3104,190 @@ html[data-ui-font="naikai-light"] body{font-weight:300}
     display:flex;
   }
 }
+
+
+/* v61: merged monthly summary row + topbar study reset + transparent flip timer */
+.month-plan-summary-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:stretch;
+  gap:14px;
+}
+.month-summary-metrics{
+  min-width:0;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:10px!important;
+}
+.month-summary-metrics .metric-card{
+  min-width:0;
+  height:88px;
+  padding:12px 14px;
+  border-radius:18px;
+}
+.month-summary-metrics .metric-card strong{
+  font-size:25px;
+  line-height:1;
+}
+.month-summary-metrics .metric-card span,
+.month-summary-metrics .metric-card small{
+  font-size:9px;
+}
+.month-summary-actions{
+  display:flex;
+  align-items:stretch;
+  gap:9px;
+}
+.month-summary-import{
+  width:195px;
+  min-width:195px;
+  height:88px;
+  padding:10px 12px;
+  border-radius:18px;
+}
+.month-summary-import>span{
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+}
+.month-summary-import strong{
+  font-size:10px;
+}
+.month-summary-import small{
+  font-size:8px;
+}
+.month-summary-picker{
+  width:178px;
+  min-width:178px;
+  height:88px!important;
+  margin:0!important;
+  border-radius:18px!important;
+  font-size:13px;
+  padding:0 12px!important;
+}
+.month-summary-add{
+  width:126px;
+  min-width:126px;
+  height:88px;
+  align-self:stretch;
+  border-radius:18px;
+  padding:0 12px;
+}
+.month-plan-page .calendar-panel{
+  margin-top:0;
+}
+
+.study-reset-order-button{
+  height:48px;
+  padding:0 14px;
+  border:1px solid color-mix(in srgb,var(--primary) 24%,var(--line));
+  border-radius:14px;
+  background:color-mix(in srgb,var(--panel) 92%,var(--primary));
+  color:var(--primary-deep);
+  font-size:10px;
+  font-weight:750;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.study-reset-order-button:hover{
+  border-color:var(--primary);
+  background:color-mix(in srgb,var(--primary) 10%,var(--panel));
+}
+body:has(.study-time-page) .layout-edit-toggle,
+body:has(.study-time-page) .study-reset-order-button{
+  height:48px;
+  align-self:center;
+}
+
+/* Today total now belongs to the focus card, directly above the flip digits. */
+.focus-today-total{
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:7px;
+  margin:-2px 0 2px;
+  line-height:1;
+}
+.focus-today-total span{
+  color:var(--muted);
+  font-size:9px;
+}
+.focus-today-total strong{
+  color:var(--primary-deep);
+  font:600 16px/1 Georgia,serif;
+}
+
+/* Keep the flip cards glassy, but remove the large colored/glass backing plate. */
+.focus-card .focus-flip-clock{
+  width:min(318px,100%);
+  height:76px;
+  min-height:76px;
+  margin:0 auto 7px;
+  padding:4px 0 6px;
+  border:0!important;
+  border-radius:0;
+  background:transparent!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  overflow:visible;
+}
+.focus-card .focus-flip-clock::before,
+.focus-card .focus-flip-clock::after{
+  display:none!important;
+}
+.focus-card .focus-clock-status{
+  margin-bottom:1px;
+}
+@media(min-width:1101px){
+  .study-reorder-focus .focus-clock{
+    height:76px;
+    min-height:76px;
+    margin-bottom:7px;
+  }
+}
+
+/* With the sort toolbar removed, reclaim its vertical space. */
+@media(min-width:1101px){
+  .study-time-page{
+    gap:10px;
+    --study-overview-height:clamp(550px,calc(100dvh - 174px),650px);
+  }
+}
+
+@media(max-width:1380px){
+  .month-plan-summary-row{
+    grid-template-columns:1fr;
+  }
+  .month-summary-actions{
+    justify-content:flex-end;
+  }
+  .month-summary-import{
+    height:58px;
+  }
+  .month-summary-picker,
+  .month-summary-add{
+    height:58px!important;
+  }
+}
+
+@media(max-width:760px){
+  .month-summary-metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .month-summary-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .month-summary-import,
+  .month-summary-picker,
+  .month-summary-add{
+    width:100%;
+    min-width:0;
+  }
+  .month-summary-add{
+    grid-column:1/-1;
+  }
+  .study-reset-order-button{
+    height:42px;
+  }
+}
