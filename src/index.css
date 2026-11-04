@@ -3451,3 +3451,76 @@ body:has(.study-time-page) .study-reset-order-button{
     margin-bottom:7px;
   }
 }
+
+
+/* v64: focus summary = total row + current-focus/flip-clock row */
+.focus-summary-stack{
+  width:100%;
+  margin:0 0 8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.focus-summary-row{
+  min-height:0;
+  margin:0;
+  line-height:1;
+}
+.focus-summary-row h2{
+  margin:0;
+  color:var(--ink);
+  font-family:serif;
+  font-size:18px;
+  font-weight:500;
+  line-height:1.2;
+  letter-spacing:.01em;
+}
+.focus-summary-total{
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:12px;
+}
+.focus-summary-total>strong{
+  color:var(--primary-deep);
+  font:600 21px/1 Georgia,serif;
+}
+.focus-summary-current{
+  display:grid;
+  grid-template-columns:max-content auto;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+}
+.focus-summary-current .focus-flip-clock{
+  width:auto;
+  height:50px;
+  min-height:50px;
+  margin:0;
+  padding:0;
+}
+.focus-summary-current .flip-clock{
+  height:50px;
+}
+.focus-summary-current .flip-unit b{
+  font-size:24px;
+}
+@media(min-width:1101px){
+  .study-reorder-focus .focus-summary-current .focus-clock{
+    width:auto;
+    height:50px;
+    min-height:50px;
+    margin:0;
+  }
+  .study-time-page{
+    --study-overview-height:clamp(550px,calc(100dvh - 106px),690px);
+  }
+}
+@media(max-width:520px){
+  .focus-summary-row h2{
+    font-size:17px;
+  }
+  .focus-summary-current{
+    gap:10px;
+  }
+}
