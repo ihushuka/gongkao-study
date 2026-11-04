@@ -3291,3 +3291,110 @@ body:has(.study-time-page) .study-reset-order-button{
     height:42px;
   }
 }
+
+
+/* v62: compact monthly summary lives inside the calendar panel */
+.month-plan-page .month-calendar-summarybar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:stretch;
+  gap:12px;
+  margin-bottom:8px;
+  padding:0 0 10px;
+  border-bottom:1px solid color-mix(in srgb,var(--primary) 10%,var(--line));
+}
+.month-plan-page .month-summary-metrics{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:8px!important;
+  min-width:0;
+}
+.month-plan-page .month-summary-metrics .metric-card{
+  height:66px;
+  min-height:66px;
+  padding:8px 11px;
+  border-radius:14px;
+}
+.month-plan-page .month-summary-metrics .metric-card span{
+  font-size:8px;
+  line-height:1.2;
+}
+.month-plan-page .month-summary-metrics .metric-card strong{
+  margin:3px 0 2px;
+  font-size:19px;
+  line-height:1;
+}
+.month-plan-page .month-summary-metrics .metric-card small{
+  font-size:8px;
+  line-height:1.2;
+}
+.month-plan-page .month-summary-actions{
+  display:flex;
+  align-items:stretch;
+  gap:8px;
+}
+.month-plan-page .month-summary-import{
+  width:184px;
+  min-width:184px;
+  height:66px;
+  padding:8px 11px;
+  border-radius:14px;
+}
+.month-plan-page .month-summary-import>span{
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  border-radius:10px;
+}
+.month-plan-page .month-summary-import strong{
+  font-size:10px;
+}
+.month-plan-page .month-summary-import small{
+  font-size:8px;
+}
+.month-plan-page .month-summary-picker{
+  width:166px;
+  min-width:166px;
+  height:66px!important;
+  margin:0!important;
+  padding:0 10px!important;
+  border-radius:14px!important;
+  font-size:12px;
+}
+.month-plan-page .month-summary-add{
+  width:118px;
+  min-width:118px;
+  height:66px;
+  padding:0 10px;
+  border-radius:14px;
+}
+.month-plan-page .calendar-week{
+  margin-top:0;
+}
+
+@media(max-width:1320px){
+  .month-plan-page .month-calendar-summarybar{
+    grid-template-columns:1fr;
+  }
+  .month-plan-page .month-summary-actions{
+    justify-content:flex-end;
+  }
+}
+@media(max-width:760px){
+  .month-plan-page .month-summary-metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .month-plan-page .month-summary-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .month-plan-page .month-summary-import,
+  .month-plan-page .month-summary-picker,
+  .month-plan-page .month-summary-add{
+    width:100%;
+    min-width:0;
+  }
+  .month-plan-page .month-summary-add{
+    grid-column:1/-1;
+  }
+}
