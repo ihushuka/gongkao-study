@@ -3398,3 +3398,56 @@ body:has(.study-time-page) .study-reset-order-button{
     grid-column:1/-1;
   }
 }
+
+
+/* v63: two-row focus summary above the flip timer */
+.focus-summary-stack{
+  width:min(318px,100%);
+  margin:0 auto 3px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.focus-summary-row{
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:9px;
+  min-height:20px;
+  line-height:1.15;
+}
+.focus-summary-row>span{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:650;
+  letter-spacing:.02em;
+}
+.focus-summary-total>strong{
+  color:var(--primary-deep);
+  font:600 21px/1 Georgia,serif;
+}
+.focus-summary-current>strong{
+  max-width:220px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:color-mix(in srgb,var(--primary-deep) 56%,var(--muted));
+  font-size:10px;
+  font-weight:600;
+}
+.focus-card .focus-flip-clock{
+  height:58px;
+  min-height:58px;
+  padding:0 0 5px;
+  margin:0 auto 7px;
+}
+.focus-card .focus-flip-clock .flip-clock{
+  height:50px;
+}
+@media(min-width:1101px){
+  .study-reorder-focus .focus-clock{
+    height:58px;
+    min-height:58px;
+    margin-bottom:7px;
+  }
+}
