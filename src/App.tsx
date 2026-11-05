@@ -13,7 +13,7 @@ type DailyRoutine = { id: number; title: string; subject: string; minutes: numbe
 type Practice = { id: number; date: string; source: string; module: string; correct: number; total: number; minutes: number; presetId?: number; lessonNumbers?: number[]; subtaskIds?: string[] };
 type PracticePaperModuleResult = { module: string; correct: number; total: number };
 type PracticePaper = { id: number; date: string; title: string; score?: number; modules: PracticePaperModuleResult[] };
-type StudySession = { id: number; date: string; module: string; seconds: number; startTime?: string; endTime?: string; title?: string; source?: string; note?: string; linkedTaskKey?: string };
+type StudySession = { id: number; date: string; module: string; seconds: number; startTime?: string; endTime?: string; title?: string; source?: string; note?: string; linkedTaskKey?: string; linkedTaskTitle?: string; linkedTaskSubject?: string; linkedPresetId?: number; linkedLessonNumbers?: number[]; linkedSubtaskIds?: string[] };
 type LifeEventSide = "planned" | "actual";
 type LifeEventTiming = "range" | "point";
 type LifeEventCategory = string;
@@ -135,14 +135,41 @@ const inferSubject = (title: string) => {
 };
 const inferMinutes = (title: string) => Number(title.match(/(\d+)\s*(?:min|分钟)/i)?.[1] || 45);
 const makeTaskKey = (kind: "task" | "routine", id: number) => `${kind}:${id}`;
-const resolveLinkedTask = (session: Pick<StudySession, "linkedTaskKey">, tasks: Task[], routines: DailyRoutine[]) => {
-  if (!session.linkedTaskKey) return null;
-  const [kind, rawId] = session.linkedTaskKey.split(":");
+const linkedTaskSnapshot = (taskKey: string | undefined, tasks: Task[], routines: DailyRoutine[]) => {
+  const empty = { linkedTaskKey: undefined, linkedTaskTitle: undefined, linkedTaskSubject: undefined, linkedPresetId: undefined, linkedLessonNumbers: undefined, linkedSubtaskIds: undefined };
+  if (!taskKey) return empty;
+  const [kind, rawId] = taskKey.split(":");
   const id = Number(rawId);
-  if (!Number.isFinite(id)) return null;
-  if (kind === "task") { const task = tasks.find(item => item.id === id); return task ? { title: task.title, subject: task.subject } : null; }
-  if (kind === "routine") { const routine = routines.find(item => item.id === id); return routine ? { title: routine.title, subject: routine.subject } : null; }
-  return null;
+  if (!Number.isFinite(id)) return { ...empty, linkedTaskKey: taskKey };
+  if (kind === "task") {
+    const task = tasks.find(item => item.id === id);
+    if (!task) return { ...empty, linkedTaskKey: taskKey };
+    const lessons = taskLessonNumbers(task);
+    return {
+      linkedTaskKey: taskKey,
+      linkedTaskTitle: task.title,
+      linkedTaskSubject: task.subject,
+      linkedPresetId: task.presetId,
+      linkedLessonNumbers: lessons.length ? lessons : undefined,
+      linkedSubtaskIds: task.subtaskIds?.length ? [...task.subtaskIds] : undefined,
+    };
+  }
+  if (kind === "routine") {
+    const routine = routines.find(item => item.id === id);
+    return routine ? { ...empty, linkedTaskKey: taskKey, linkedTaskTitle: routine.title, linkedTaskSubject: routine.subject } : { ...empty, linkedTaskKey: taskKey };
+  }
+  return { ...empty, linkedTaskKey: taskKey };
+};
+const resolveLinkedTask = (session: Pick<StudySession, "linkedTaskKey" | "linkedTaskTitle" | "linkedTaskSubject">, tasks: Task[], routines: DailyRoutine[]) => {
+  if (session.linkedTaskKey) {
+    const [kind, rawId] = session.linkedTaskKey.split(":");
+    const id = Number(rawId);
+    if (Number.isFinite(id)) {
+      if (kind === "task") { const task = tasks.find(item => item.id === id); if (task) return { title: task.title, subject: task.subject }; }
+      if (kind === "routine") { const routine = routines.find(item => item.id === id); if (routine) return { title: routine.title, subject: routine.subject }; }
+    }
+  }
+  return session.linkedTaskTitle ? { title: session.linkedTaskTitle, subject: session.linkedTaskSubject || "" } : null;
 };
 const sessionDisplayTitle = (session: StudySession, tasks: Task[], routines: DailyRoutine[]) => resolveLinkedTask(session, tasks, routines)?.title || session.title || session.module;
 const sessionDisplayModule = (session: StudySession, tasks: Task[], routines: DailyRoutine[]) => session.module?.trim() || resolveLinkedTask(session, tasks, routines)?.subject || "其他计划";
@@ -929,7 +956,7 @@ export default function App() {
     const finalSeconds = activeSeconds + elapsedSinceLastSync();
     if (finalSeconds > 12 * 3600 && !window.confirm(`本次学习记录达到 ${formatHours(finalSeconds)}，超过12小时。确认记录无误并保存吗？`)) return;
     const endedAt = timerPausedAt || new Date();
-    if (finalSeconds > 0) setSessions([...sessions, { id: Date.now(), date: localISO(timerStartedAt || endedAt), module: timerModule, title: timerTitle.trim(), source: timerSource.trim() || undefined, linkedTaskKey: timerTaskKey || undefined, seconds: finalSeconds, startTime: timerStartedAt ? `${pad(timerStartedAt.getHours())}:${pad(timerStartedAt.getMinutes())}` : undefined, endTime: `${pad(endedAt.getHours())}:${pad(endedAt.getMinutes())}` }]);
+    if (finalSeconds > 0) setSessions([...sessions, { id: Date.now(), date: localISO(timerStartedAt || endedAt), module: timerModule, title: timerTitle.trim(), source: timerSource.trim() || undefined, ...linkedTaskSnapshot(timerTaskKey || undefined, tasks, routines), seconds: finalSeconds, startTime: timerStartedAt ? `${pad(timerStartedAt.getHours())}:${pad(timerStartedAt.getMinutes())}` : undefined, endTime: `${pad(endedAt.getHours())}:${pad(endedAt.getMinutes())}` }]);
     timerLastSyncRef.current = null;
     setTimerOn(false); setTimerPaused(false); setTimerPausedAt(null); setTimerStartedAt(null); setActiveSeconds(0); flash("本次学习时长已保存，并同步到实际学习时间轴");
   };
@@ -962,7 +989,7 @@ export default function App() {
   else if (tab === "sleep") page = <SleepTrend />;
   else if (tab === "plan") page = <Plan tasks={tasks} setTasks={setTasks} routines={routines} setRoutines={setRoutines} flash={flash} moduleOptions={moduleOptions} taskPresets={taskPresets} />;
   else if (tab === "tasklib") page = <StudyTaskManager presets={taskPresets} setPresets={setTaskPresets} tasks={tasks} setTasks={setTasks} moduleOptions={moduleOptions} flash={flash} />;
-  else if (tab === "study") page = <StudyTime sessions={sessions} setSessions={setSessions} tasks={tasks} routines={routines} flash={flash} timer={sharedTimer} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} />;
+  else if (tab === "study") page = <StudyTime sessions={sessions} setSessions={setSessions} tasks={tasks} routines={routines} taskPresets={taskPresets} flash={flash} timer={sharedTimer} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} />;
   else if (tab === "practice") page = <PracticeView practices={practices} setPractices={setPractices} flash={flash} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} timer={sharedTimer} taskPresets={taskPresets} setTaskPresets={setTaskPresets} />;
   else if (tab === "idiom") page = <IdiomView idioms={idioms} setIdioms={setIdioms} flash={flash} />;
   else if (tab === "mistakes") page = <MistakeView mistakes={mistakes} setMistakes={setMistakes} flash={flash} />;
@@ -2263,7 +2290,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   </div>;
 }
 
-function StudyTime({ sessions, setSessions, tasks, routines, flash, timer, moduleOptions, setModuleOptions }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; tasks: Task[]; routines: DailyRoutine[]; flash: (x: string) => void; timer: TimerShared; moduleOptions: string[]; setModuleOptions: Dispatch<SetStateAction<string[]>> }) {
+function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash, timer, moduleOptions, setModuleOptions }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; tasks: Task[]; routines: DailyRoutine[]; taskPresets: StudyTaskPreset[]; flash: (x: string) => void; timer: TimerShared; moduleOptions: string[]; setModuleOptions: Dispatch<SetStateAction<string[]>> }) {
   const [date, setDate] = useStoredState<string>("shore-study-selected-date", localISO()), [module, setModule] = useState(moduleOptions[0] || "资料分析");
   const [recordTitle, setRecordTitle] = useState(""), [recordSource, setRecordSource] = useState(""), [recordNote, setRecordNote] = useState(""), [recordTaskKey, setRecordTaskKey] = useState("");
   const [startTime, setStartTime] = useState("19:00"), [endTime, setEndTime] = useState("20:00"), [editingId, setEditingId] = useState<number | null>(null);
@@ -2345,28 +2372,92 @@ function StudyTime({ sessions, setSessions, tasks, routines, flash, timer, modul
   });
   const heatTotal = heatData.reduce((sum, x) => sum + x.seconds, 0), studiedDays = heatData.filter(x => x.seconds > 0).length;
   const selectedSessions = sessions.filter(s => normalizedDate(s.date) === selectedHeatDay);
-  const taskChoicesFor = (targetDate: string) => [
+  type StudyTaskChoice = { key: string; title: string; subject: string; start?: string; end?: string; timeLabel: string; kind: string; done: boolean; trackingLabel?: string; originalLinked?: boolean };
+  const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
+  const taskTrackingLabel = (task: Task) => {
+    if (task.presetId === undefined && !task.followSourcePresetId && !task.presetAutoPlan) return "";
+    const preset = task.presetId !== undefined ? presetMap.get(task.presetId) : undefined;
+    const lessons = taskLessonNumbers(task);
+    const lessonLabel = lessons.length ? (preset ? `第${formatPresetLessonSelection(preset, lessons)}课` : `第${lessons.join("、")}课`) : "";
+    return [task.followSourcePresetId ? "跟随进度" : "进度跟踪", preset?.title, lessonLabel].filter(Boolean).join(" · ");
+  };
+  const taskChoiceFromTask = (task: Task, originalLinked = false): StudyTaskChoice => ({
+    key: makeTaskKey("task", task.id),
+    title: task.title,
+    subject: task.subject,
+    start: task.plannedStart,
+    end: task.plannedEnd,
+    timeLabel: formatPlannedSlots(task),
+    kind: task.presetId !== undefined || task.followSourcePresetId || task.presetAutoPlan ? "进度任务" : "单日任务",
+    done: task.done,
+    trackingLabel: taskTrackingLabel(task) || undefined,
+    originalLinked,
+  });
+  const taskChoicesFor = (targetDate: string): StudyTaskChoice[] => [
     ...routines.filter(r => r.month === targetDate.slice(0, 7) && routineApplies(r, targetDate)).map(r => ({ key: makeTaskKey("routine", r.id), title: r.title, subject: r.subject, start: r.plannedStart, end: r.plannedEnd, timeLabel: formatPlannedSlots(r), kind: "每日任务", done: r.completedDates.includes(targetDate) })),
-    ...tasks.filter(t => normalizedDate(t.date) === targetDate).map(t => ({ key: makeTaskKey("task", t.id), title: t.title, subject: t.subject, start: t.plannedStart, end: t.plannedEnd, timeLabel: formatPlannedSlots(t), kind: "单日任务", done: t.done })),
+    ...tasks.filter(t => normalizedDate(t.date) === targetDate).map(t => taskChoiceFromTask(t)),
   ];
+  const editingSession = editingId !== null ? sessions.find(session => session.id === editingId) : undefined;
+  const linkedChoiceForSession = (session?: StudySession): StudyTaskChoice | null => {
+    if (!session?.linkedTaskKey) return null;
+    const [kind, rawId] = session.linkedTaskKey.split(":");
+    const id = Number(rawId);
+    if (kind === "routine" && Number.isFinite(id)) {
+      const routine = routines.find(item => item.id === id);
+      if (routine) return { key: session.linkedTaskKey, title: routine.title, subject: routine.subject, start: routine.plannedStart, end: routine.plannedEnd, timeLabel: formatPlannedSlots(routine), kind: "每日任务", done: routine.completedDates.includes(normalizedDate(session.date)), originalLinked: true };
+    }
+    if (kind === "task" && Number.isFinite(id)) {
+      const direct = tasks.find(item => item.id === id);
+      if (direct) return taskChoiceFromTask(direct, true);
+    }
+    const inferredPreset = session.linkedPresetId !== undefined
+      ? presetMap.get(session.linkedPresetId)
+      : taskPresets.find(preset => Boolean(session.linkedTaskTitle || session.title) && (session.linkedTaskTitle || session.title || "").startsWith(preset.title));
+    if (inferredPreset) {
+      const lessonSet = new Set(session.linkedLessonNumbers || []);
+      const samePresetTasks = tasks.filter(task => task.presetId === inferredPreset.id && !task.migrationHidden);
+      const recovered = samePresetTasks.find(task => {
+        const taskLessons = taskLessonNumbers(task);
+        return lessonSet.size ? taskLessons.some(lesson => lessonSet.has(lesson)) : task.title === (session.linkedTaskTitle || session.title);
+      }) || samePresetTasks.find(task => task.title === (session.linkedTaskTitle || session.title));
+      if (recovered) return taskChoiceFromTask(recovered, true);
+    }
+    const exactTitle = session.linkedTaskTitle || session.title || session.module;
+    const sameTitle = tasks.find(task => task.title === exactTitle && task.subject === (session.linkedTaskSubject || session.module));
+    if (sameTitle) return taskChoiceFromTask(sameTitle, true);
+    const snapshotPreset = session.linkedPresetId !== undefined ? presetMap.get(session.linkedPresetId) : inferredPreset;
+    const snapshotLessons = session.linkedLessonNumbers || [];
+    return {
+      key: session.linkedTaskKey,
+      title: exactTitle,
+      subject: session.linkedTaskSubject || session.module || "其他计划",
+      timeLabel: "原学习记录",
+      kind: snapshotPreset ? "进度任务" : "原关联任务",
+      done: false,
+      trackingLabel: snapshotPreset ? ["进度跟踪", snapshotPreset.title, snapshotLessons.length ? `第${formatPresetLessonSelection(snapshotPreset, snapshotLessons)}课` : ""].filter(Boolean).join(" · ") : "原关联任务",
+      originalLinked: true,
+    };
+  };
   const todayChoices = taskChoicesFor(localISO()).sort((a, b) => Number(a.done) - Number(b.done) || ((timeMinutes(a.start) ?? 1440) - (timeMinutes(b.start) ?? 1440)));
-  const manualChoices = taskChoicesFor(date);
+  const baseManualChoices = taskChoicesFor(date);
+  const linkedEditChoice = linkedChoiceForSession(editingSession);
+  const manualChoices = linkedEditChoice ? [linkedEditChoice, ...baseManualChoices.filter(choice => choice.key !== linkedEditChoice.key)] : baseManualChoices;
   const sourceOptions = Array.from(new Set([...sources, ...sessions.map(s => s.source || "").filter(Boolean), timer.timerSource].filter(Boolean)));
   const ensureSharedModule = (value: string) => { const clean = value.trim(); if (!clean) return moduleOptions[0] || "资料分析"; if (!moduleOptions.includes(clean)) setModuleOptions(current => current.includes(clean) ? current : [...current, clean]); return clean; };
-  const selectFocusTask = (choice: ReturnType<typeof taskChoicesFor>[number]) => { if (timer.timerOn || choice.done) return; timer.setTimerTaskKey(choice.key); timer.setTimerTitle(choice.title); timer.setTimerModule(ensureSharedModule(choice.subject)); };
+  const selectFocusTask = (choice: StudyTaskChoice) => { if (timer.timerOn || choice.done) return; timer.setTimerTaskKey(choice.key); timer.setTimerTitle(choice.title); timer.setTimerModule(ensureSharedModule(choice.subject)); };
   useEffect(() => {
     if (timer.timerOn || !timer.timerTaskKey) return;
     const selected = todayChoices.find(choice => choice.key === timer.timerTaskKey);
     if (selected?.done) { timer.setTimerTaskKey(""); timer.setTimerTitle(""); }
   }, [tasks, routines, timer.timerOn, timer.timerTaskKey]);
-  const selectRecordTask = (choice: ReturnType<typeof taskChoicesFor>[number]) => { setRecordTaskKey(choice.key); setRecordTitle(choice.title); setModule(ensureSharedModule(choice.subject)); };
+  const selectRecordTask = (choice: StudyTaskChoice) => { setRecordTaskKey(choice.key); setRecordTitle(choice.title); setModule(ensureSharedModule(choice.subject)); };
   const addManual = (e: FormEvent) => {
     e.preventDefault();
     if (!recordTitle.trim()) { flash("请选择当日任务或填写具体学习内容"); return; }
     const finalMinutes = studyRangeMinutes(startTime, endTime);
     if (finalMinutes === null) { flash("学习记录的开始时间和结束时间不能相同"); return; }
     if (finalMinutes > 720 && !window.confirm(`这条学习记录达到 ${Math.round(finalMinutes / 60 * 10) / 10} 小时，超过12小时。确认记录无误吗？`)) return;
-    const row: Omit<StudySession, "id"> = { date: normalizedDate(date), module: module.trim() || "其他计划", title: recordTitle.trim(), source: recordSource.trim() || undefined, note: recordNote.trim() || undefined, linkedTaskKey: recordTaskKey || undefined, seconds: finalMinutes * 60, startTime, endTime };
+    const row: Omit<StudySession, "id"> = { date: normalizedDate(date), module: module.trim() || "其他计划", title: recordTitle.trim(), source: recordSource.trim() || undefined, note: recordNote.trim() || undefined, ...linkedTaskSnapshot(recordTaskKey || undefined, tasks, routines), seconds: finalMinutes * 60, startTime, endTime };
     if (editingId !== null) {
       setSessions(current => current.map(session => session.id === editingId ? { ...session, ...row } : session));
       setEditingId(null);
@@ -2386,7 +2477,7 @@ function StudyTime({ sessions, setSessions, tasks, routines, flash, timer, modul
     if (id === "distribution") return <div className="panel study-distribution-panel"><div className="panel-title study-panel-title-with-tabs"><div><h2>模块投入分布</h2><p>{distributionScope === "month" ? `${distributionMonth} 各模块投入` : "全部历史记录的模块投入"}</p></div><div className="range-tabs"><button type="button" className={distributionScope === "month" ? "active" : ""} onClick={() => setDistributionScope("month")}>月投入</button><button type="button" className={distributionScope === "all" ? "active" : ""} onClick={() => setDistributionScope("all")}>总体投入</button></div></div>{distributionScope === "month" && <div className="distribution-month-row"><label>查看月份<input type="month" value={distributionMonth} onChange={e => setDistributionMonth(e.target.value)} /></label><span>可切换任意月份，不影响月历热力图当前月份。</span></div>}<div className="horizontal-bars">{moduleStats.some(x => x.seconds > 0) ? moduleStats.map(x => <div key={x.module}><span>{x.module}</span><div><i style={{ width: `${x.seconds / maxModule * 100}%` }} /></div><strong>{Math.round(x.seconds / 360) / 10}h</strong></div>) : <Empty text={distributionScope === "month" ? "这个月还没有学习计时" : "还没有学习计时记录"} />}</div></div>;
     if (id === "timeband") return <div className="panel study-timeband-panel"><div className="panel-title"><div><h2>学习时间段分布</h2><p>同一张图比较“今天”和“近7天日均”，更直观看出这一周最常在哪些时段学习。</p></div><div className="timeband-legend"><span><i className="today" />今天</span><span><i className="week" />近7天日均</span></div></div><div className="timeband-summary-grid"><div><strong>{Math.round(todayTimeBandMinutes / 6) / 10}h</strong><span>今天已记录</span></div><div><strong>{Math.round(weekTimeBandMinutes / 42) / 10}h</strong><span>近7天日均</span></div><div className="timeband-frequent"><span>本周高频时段</span><strong>{frequentTimeBands.length ? frequentTimeBands.map(item => `${item.label}（${item.studyDays}天）`).join(" · ") : "暂无足够记录"}</strong></div></div><div className="timeband-chart grouped">{timeBands.map(item => <div className="timeband-column" key={item.label} title={`${item.label} · 今天 ${Math.round(item.todayMinutes)} 分钟 · 近7天日均 ${Math.round(item.weekAverageMinutes)} 分钟 · 本周 ${item.studyDays} 天在此时段学习`}><span>{item.studyDays ? `${item.studyDays}天` : ""}</span><div className="timeband-pair"><i className="today" style={{ height: `${item.todayMinutes ? Math.max(4, item.todayMinutes / maxTimeBand * 118) : 2}px` }} /><i className="week" style={{ height: `${item.weekAverageMinutes ? Math.max(4, item.weekAverageMinutes / maxTimeBand * 118) : 2}px` }} /></div><small>{item.label}</small></div>)}</div><p className="timeband-note">每组左柱=今天该时段学习分钟数，右柱=近7天该时段的日均学习分钟数；柱顶“X天”表示本周有多少天在该时段学习。未填写开始/结束时间的历史记录不会计入。</p></div>;
     if (id === "heatmap") return <section className="panel study-heatmap-panel"><div className="heatmap-head"><div><p className="eyebrow">MONTHLY FOCUS</p><h2>月历学习时长</h2><span>颜色越深，代表当天投入时间越长。</span></div><input className="month-picker" type="month" value={heatMonth} onChange={e => setHeatMonth(e.target.value)} /></div><div className="heatmap-summary"><div><strong>{formatHours(heatTotal)}</strong><span>本月累计</span></div><div><strong>{studiedDays}</strong><span>学习天数</span></div><div><strong>{studiedDays ? formatHours(Math.round(heatTotal / studiedDays)) : "0h 0m"}</strong><span>日均时长</span></div></div><div className="heatmap-week">{["一", "二", "三", "四", "五", "六", "日"].map(x => <span key={x}>周{x}</span>)}</div><div className="study-heatmap">{heatCells.map((day, i) => day === null ? <div className="heat-day blank" key={`hb${i}`} /> : (() => { const item = heatData[day - 1]; return <button className={`heat-day level-${item.level} ${item.day === localISO() ? "today" : ""} ${item.day === selectedHeatDay ? "selected" : ""}`} key={item.day} onClick={() => { setDate(item.day); setSelectedHeatDay(item.day); }} title={`${item.day} · ${formatHours(item.seconds)}`}><span>{day}</span><strong>{item.seconds ? formatHours(item.seconds) : "—"}</strong></button>; })())}</div><div className="heat-legend"><span>少</span>{[0, 1, 2, 3, 4, 5].map(x => <i className={`level-${x}`} key={x} />)}<span>多</span><small>0 · ≤1h · 1–2h · 2–4h · 4–6h · ≥6h</small></div><div className="day-history"><div><h3>{selectedHeatDay} 学习历史</h3><strong>{formatHours(selectedSessions.reduce((sum, x) => sum + x.seconds, 0))}</strong></div>{selectedSessions.length ? selectedSessions.map(item => <article key={item.id}><span>{formatStudyRange(item.startTime, item.endTime)}</span><div><strong>{sessionDisplayTitle(item, tasks, routines)}</strong><small>{sessionDisplayModule(item, tasks, routines)}{item.source ? ` · ${item.source}` : ""}{item.note ? ` · 备注：${item.note}` : ""}{item.linkedTaskKey ? " · 已关联计划" : ""}</small></div><em>{formatHours(item.seconds)}</em></article>) : <p>当天还没有学习记录。</p>}</div></section>;
-    if (id === "manual") return <form className="panel form-card study-manual-panel" onSubmit={addManual}><PanelTitle title={editingId === null ? "补录学习时长" : "修改学习记录"} /><label className="manual-task-label">选择该日计划任务<div className="focus-task-tags manual">{manualChoices.length ? manualChoices.map(choice => <button type="button" className={`${recordTaskKey === choice.key ? "active" : ""} ${choice.done ? "done" : ""}`.trim()} key={choice.key} onClick={() => selectRecordTask(choice)}><strong>{choice.title}</strong><small>{choice.done ? "✓ 已完成 · " : ""}{choice.timeLabel !== "待定" ? `${choice.timeLabel} · ` : ""}{choice.subject}</small></button>) : <small>该日期没有计划任务，可直接填写具体内容。</small>}<button type="button" className={!recordTaskKey ? "active custom" : "custom"} onClick={() => { setRecordTaskKey(""); setRecordTitle(""); }}>＋ 自定义内容</button></div></label><div className="form-grid"><label>学习日期<input type="date" value={date} onChange={e => { setDate(e.target.value); setRecordTaskKey(""); setRecordTitle(""); }} /></label><label>学习模块<select value={module} onChange={e => setModule(e.target.value)}>{moduleOptions.map(m => <option key={m}>{m}</option>)}</select><small>修改后会同步到最近记录、模块统计和实际时间轴</small></label><label className="full-field">具体学习内容<input value={recordTitle} onChange={e => { setRecordTitle(e.target.value); setRecordTaskKey(""); }} placeholder="例如：资料分析第5组限时训练" /></label><label className="full-field">练习/资料来源<input list="manual-source-options" value={recordSource} onChange={e => setRecordSource(e.target.value)} placeholder="例如：粉笔题库、超大杯、真题册，可自定义" /></label><label className="full-field">备注<input value={recordNote} onChange={e => setRecordNote(e.target.value)} placeholder="可选，例如：中途休息10分钟、重点复盘某题" /></label><label>开始时间<input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label><label>结束时间<input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></label><label>自动计算时长<input readOnly value={studyRangeMinutes(startTime, endTime) !== null ? `${studyRangeMinutes(startTime, endTime)} 分钟${studyCrossesMidnight(startTime, endTime) ? "（跨至次日）" : ""}` : "时间范围无效"} /><small>结束时间早于开始时间时，自动按次日结束计算；开始和结束相同才无效</small></label></div><datalist id="manual-source-options">{sourceOptions.map(item => <option key={item} value={item} />)}</datalist><button className="primary-button">{editingId === null ? "保存时长" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button cancel-edit" onClick={() => { setEditingId(null); setRecordTitle(""); setRecordSource(""); setRecordNote(""); setRecordTaskKey(""); }}>取消修改</button>}</form>;
+    if (id === "manual") return <form className="panel form-card study-manual-panel" onSubmit={addManual}><PanelTitle title={editingId === null ? "补录学习时长" : "修改学习记录"} /><label className="manual-task-label">选择该日计划任务<div className="focus-task-tags manual">{manualChoices.length ? manualChoices.map(choice => <button type="button" className={`${recordTaskKey === choice.key ? "active" : ""} ${choice.done ? "done" : ""} ${choice.originalLinked ? "original-linked-task" : ""}`.trim()} key={choice.key} onClick={() => selectRecordTask(choice)}><strong>{choice.title}</strong><small>{choice.originalLinked ? "↩ 原关联 · " : ""}{choice.trackingLabel ? `${choice.trackingLabel} · ` : ""}{choice.done ? "✓ 已完成 · " : ""}{choice.timeLabel !== "待定" ? `${choice.timeLabel} · ` : ""}{choice.subject}</small></button>) : <small>该日期没有计划任务，可直接填写具体内容。</small>}<button type="button" className={!recordTaskKey ? "active custom" : "custom"} onClick={() => { setRecordTaskKey(""); setRecordTitle(""); }}>＋ 自定义内容</button></div></label><div className="form-grid"><label>学习日期<input type="date" value={date} onChange={e => { setDate(e.target.value); setRecordTaskKey(""); setRecordTitle(""); }} /></label><label>学习模块<select value={module} onChange={e => setModule(e.target.value)}>{moduleOptions.map(m => <option key={m}>{m}</option>)}</select><small>修改后会同步到最近记录、模块统计和实际时间轴</small></label><label className="full-field">具体学习内容<input value={recordTitle} onChange={e => { setRecordTitle(e.target.value); setRecordTaskKey(""); }} placeholder="例如：资料分析第5组限时训练" /></label><label className="full-field">练习/资料来源<input list="manual-source-options" value={recordSource} onChange={e => setRecordSource(e.target.value)} placeholder="例如：粉笔题库、超大杯、真题册，可自定义" /></label><label className="full-field">备注<input value={recordNote} onChange={e => setRecordNote(e.target.value)} placeholder="可选，例如：中途休息10分钟、重点复盘某题" /></label><label>开始时间<input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label><label>结束时间<input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></label><label>自动计算时长<input readOnly value={studyRangeMinutes(startTime, endTime) !== null ? `${studyRangeMinutes(startTime, endTime)} 分钟${studyCrossesMidnight(startTime, endTime) ? "（跨至次日）" : ""}` : "时间范围无效"} /><small>结束时间早于开始时间时，自动按次日结束计算；开始和结束相同才无效</small></label></div><datalist id="manual-source-options">{sourceOptions.map(item => <option key={item} value={item} />)}</datalist><button className="primary-button">{editingId === null ? "保存时长" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button cancel-edit" onClick={() => { setEditingId(null); setRecordTitle(""); setRecordSource(""); setRecordNote(""); setRecordTaskKey(""); }}>取消修改</button>}</form>;
     return <div className="panel study-recent-panel"><PanelTitle title="最近学习记录" /><div className="session-list">{sessions.slice().reverse().slice(0, 5).map(session => <div key={session.id}><span>{formatShortDate(session.date)}<small>{session.startTime && formatStudyRange(session.startTime, session.endTime)}</small></span><div className="session-task-copy"><strong>{sessionDisplayTitle(session, tasks, routines)}</strong><small>{sessionDisplayModule(session, tasks, routines)}{session.source ? ` · ${session.source}` : ""}{session.note ? ` · 备注：${session.note}` : ""}{session.linkedTaskKey ? " · 已关联当日计划" : ""}</small></div><em>{formatHours(session.seconds)}</em><span className="row-actions"><button onClick={() => editSession(session)}>修改</button><button onClick={() => { setSessions(sessions.filter(x => x.id !== session.id)); if (editingId === session.id) setEditingId(null); }}>删除</button></span></div>)}</div></div>;
   };
   return <div className="page-stack study-time-page"><section className="page-intro"><div><p className="eyebrow">STUDY TIMER</p><h2>记录真正投入的时间</h2><p>选择当天具体任务后计时，最近记录和实际时间轴会使用同一个任务名称。</p></div><div className="study-today"><strong>{formatHours(timer.todaySeconds)}</strong><span>今日累计</span></div></section>
