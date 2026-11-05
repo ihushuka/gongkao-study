@@ -3685,3 +3685,15 @@ body:has(.study-time-page) .study-reset-order-button{
     padding:3px 10px;
   }
 }
+
+
+/* v67: make recovered progress-linked study records obvious while editing */
+.study-reorder-manual .focus-task-tags.manual button.original-linked-task{
+  border-color:color-mix(in srgb,var(--primary) 46%,var(--line));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb,var(--primary) 9%,transparent),
+    0 4px 12px color-mix(in srgb,var(--primary) 7%,transparent);
+}
+.study-reorder-manual .focus-task-tags.manual button.original-linked-task small{
+  color:color-mix(in srgb,var(--primary-deep) 58%,var(--muted));
+}
