@@ -3697,3 +3697,37 @@ body:has(.study-time-page) .study-reset-order-button{
 .study-reorder-manual .focus-task-tags.manual button.original-linked-task small{
   color:color-mix(in srgb,var(--primary-deep) 58%,var(--muted));
 }
+
+
+/* v68: keep study-record actions visible in the form's bottom-right cell */
+.study-reorder-manual .manual-form-actions{
+  display:flex;
+  align-items:flex-end;
+  justify-content:flex-end;
+  gap:8px;
+  min-height:34px;
+  align-self:end;
+}
+.study-reorder-manual .manual-form-actions .primary-button,
+.study-reorder-manual .manual-form-actions .soft-button{
+  width:auto;
+  min-width:104px;
+  height:34px;
+  min-height:34px;
+  margin:0;
+  padding:0 14px;
+  flex:0 0 auto;
+}
+.study-reorder-manual .manual-form-actions .cancel-edit{
+  margin-top:0;
+}
+@media(max-width:760px){
+  .study-reorder-manual .manual-form-actions{
+    grid-column:1/-1;
+    justify-content:stretch;
+  }
+  .study-reorder-manual .manual-form-actions .primary-button,
+  .study-reorder-manual .manual-form-actions .soft-button{
+    flex:1 1 0;
+  }
+}
