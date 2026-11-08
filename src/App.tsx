@@ -656,7 +656,7 @@ export default function App() {
         previous: { ...session },
         next: { ...session, module: preset.subject, linkedTaskSubject: preset.subject, linkedPresetId: preset.id },
       };
-    }).filter((item): item is { previous: StudySession; next: StudySession } => Boolean(item));
+    }).filter(Boolean) as Array<{ previous: StudySession; next: StudySession }>;
     if (repairs.length) {
       recordStudySessionUndo({ label: `补同步旧历史学习记录的所属模块（${repairs.length}条）`, previous: repairs.map(item => item.previous), updatedAt: Date.now() });
       const nextById = new Map(repairs.map(item => [item.next.id, item.next] as const));
