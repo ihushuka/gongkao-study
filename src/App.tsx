@@ -629,6 +629,42 @@ export default function App() {
   const [moduleOptions, setModuleOptions] = useStoredState<string[]>("shore-practice-modules", modules);
   const [taskPresets, setTaskPresets] = useStoredState<StudyTaskPreset[]>("shore-study-task-presets", []);
   useEffect(() => {
+    const migrationKey = "shore-study-preset-module-history-sync-v1";
+    if (!taskPresets.length || localStorage.getItem(migrationKey) === "1") return;
+    const taskById = new Map(tasks.map(task => [task.id, task] as const));
+    const presetById = new Map(taskPresets.map(preset => [preset.id, preset] as const));
+    const resolvePreset = (session: StudySession) => {
+      if (session.linkedPresetId !== undefined) {
+        const direct = presetById.get(session.linkedPresetId);
+        if (direct) return direct;
+      }
+      const linkedKey = session.linkedTaskKey || "";
+      if (linkedKey.startsWith("task:")) {
+        const linkedTask = taskById.get(Number(linkedKey.slice(5)));
+        if (linkedTask?.presetId !== undefined) {
+          const linkedPreset = presetById.get(linkedTask.presetId);
+          if (linkedPreset) return linkedPreset;
+        }
+      }
+      const matches = taskPresets.filter(preset => studySessionMatchesPreset(session, preset.id, preset.title, tasks));
+      return matches.length === 1 ? matches[0] : undefined;
+    };
+    const repairs = sessions.map(session => {
+      const preset = resolvePreset(session);
+      if (!preset || session.module === preset.subject) return null;
+      return {
+        previous: { ...session },
+        next: { ...session, module: preset.subject, linkedTaskSubject: preset.subject, linkedPresetId: preset.id },
+      };
+    }).filter((item): item is { previous: StudySession; next: StudySession } => Boolean(item));
+    if (repairs.length) {
+      recordStudySessionUndo({ label: `补同步旧历史学习记录的所属模块（${repairs.length}条）`, previous: repairs.map(item => item.previous), updatedAt: Date.now() });
+      const nextById = new Map(repairs.map(item => [item.next.id, item.next] as const));
+      setSessions(current => current.map(session => nextById.get(session.id) || session));
+    }
+    localStorage.setItem(migrationKey, "1");
+  }, [taskPresets, tasks, sessions, setSessions]);
+  useEffect(() => {
     setTasks(current => {
       if (!taskPresets.length) {
         try {
