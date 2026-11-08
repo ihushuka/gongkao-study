@@ -14,6 +14,7 @@ type Practice = { id: number; date: string; source: string; module: string; corr
 type PracticePaperModuleResult = { module: string; correct: number; total: number };
 type PracticePaper = { id: number; date: string; title: string; score?: number; modules: PracticePaperModuleResult[] };
 type StudySession = { id: number; date: string; module: string; seconds: number; startTime?: string; endTime?: string; title?: string; source?: string; note?: string; linkedTaskKey?: string; linkedTaskTitle?: string; linkedTaskSubject?: string; linkedPresetId?: number; linkedLessonNumbers?: number[]; linkedSubtaskIds?: string[] };
+type StudySessionUndo = { label: string; previous: StudySession[]; updatedAt: number };
 type LifeEventSide = "planned" | "actual";
 type LifeEventTiming = "range" | "point";
 type LifeEventCategory = string;
@@ -170,6 +171,18 @@ const resolveLinkedTask = (session: Pick<StudySession, "linkedTaskKey" | "linked
     }
   }
   return session.linkedTaskTitle ? { title: session.linkedTaskTitle, subject: session.linkedTaskSubject || "" } : null;
+};
+const studySessionMatchesPreset = (session: StudySession, presetId: number, presetTitle: string, tasks: Task[]) => {
+  if (session.linkedPresetId === presetId) return true;
+  const linkedKey = session.linkedTaskKey || "";
+  if (linkedKey.startsWith("routine:")) return false;
+  if (linkedKey.startsWith("task:")) {
+    const taskId = Number(linkedKey.slice(5));
+    const linkedTask = tasks.find(task => task.id === taskId);
+    if (linkedTask) return linkedTask.presetId === presetId;
+  }
+  const titles = [session.linkedTaskTitle, session.title].filter((value): value is string => Boolean(value?.trim()));
+  return titles.some(value => value === presetTitle || value.startsWith(`${presetTitle} 第`) || value.startsWith(`${presetTitle} ·`) || value.startsWith(`${presetTitle}（`));
 };
 const sessionDisplayTitle = (session: StudySession, tasks: Task[], routines: DailyRoutine[]) => resolveLinkedTask(session, tasks, routines)?.title || session.title || session.module;
 const sessionDisplayModule = (session: StudySession, tasks: Task[], routines: DailyRoutine[]) => session.module?.trim() || resolveLinkedTask(session, tasks, routines)?.subject || "其他计划";
@@ -597,6 +610,7 @@ export default function App() {
   const [routines, setRoutines] = useStoredState<DailyRoutine[]>("shore-daily-routines", []);
   const [practices, setPractices] = useStoredState<Practice[]>("shore-practices", seedPractices);
   const [sessions, setSessions] = useStoredState<StudySession[]>("shore-study-sessions", seedSessions);
+  const [studySessionUndo, setStudySessionUndo] = useStoredState<StudySessionUndo | null>("shore-study-session-undo", null);
   const [examDates, setExamDates] = useStoredState<ExamDates>("shore-exam-dates", { national: "", provincial: "" });
   const [mistakes, setMistakes] = useStoredState<Mistake[]>("shore-mistakes", seedMistakes);
   const [idioms, setIdioms] = useStoredState<Idiom[]>("shore-idioms", seedIdioms);
@@ -933,6 +947,19 @@ export default function App() {
   }, []);
 
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2200); };
+  const undoStudySessionChange = () => {
+    const pending = studySessionUndo;
+    if (!pending?.previous.length) return;
+    const previousById = new Map(pending.previous.map(session => [session.id, session] as const));
+    setSessions(current => {
+      const currentIds = new Set(current.map(session => session.id));
+      const restored = current.map(session => previousById.get(session.id) || session);
+      const missing = pending.previous.filter(session => !currentIds.has(session.id));
+      return [...restored, ...missing];
+    });
+    setStudySessionUndo(null);
+    flash(`已撤回：${pending.label}`);
+  };
   useEffect(() => {
     if (sessionStorage.getItem("shore-backup-reminded")) return;
     const saved = localStorage.getItem("shore-last-backup-at"), days = saved ? Math.floor((Date.now() - new Date(saved).getTime()) / 86400000) : null;
@@ -988,8 +1015,8 @@ export default function App() {
   else if (tab === "daily") page = <DailyPlan tasks={tasks} setTasks={setTasks} routines={routines} setRoutines={setRoutines} sessions={sessions} setSessions={setSessions} timer={sharedTimer} />;
   else if (tab === "sleep") page = <SleepTrend />;
   else if (tab === "plan") page = <Plan tasks={tasks} setTasks={setTasks} routines={routines} setRoutines={setRoutines} flash={flash} moduleOptions={moduleOptions} taskPresets={taskPresets} />;
-  else if (tab === "tasklib") page = <StudyTaskManager presets={taskPresets} setPresets={setTaskPresets} tasks={tasks} setTasks={setTasks} moduleOptions={moduleOptions} flash={flash} />;
-  else if (tab === "study") page = <StudyTime sessions={sessions} setSessions={setSessions} tasks={tasks} routines={routines} taskPresets={taskPresets} flash={flash} timer={sharedTimer} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} />;
+  else if (tab === "tasklib") page = <StudyTaskManager presets={taskPresets} setPresets={setTaskPresets} tasks={tasks} setTasks={setTasks} sessions={sessions} setSessions={setSessions} moduleOptions={moduleOptions} studySessionUndo={studySessionUndo} setStudySessionUndo={setStudySessionUndo} undoStudySessionChange={undoStudySessionChange} flash={flash} />;
+  else if (tab === "study") page = <StudyTime sessions={sessions} setSessions={setSessions} tasks={tasks} routines={routines} taskPresets={taskPresets} studySessionUndo={studySessionUndo} setStudySessionUndo={setStudySessionUndo} undoStudySessionChange={undoStudySessionChange} flash={flash} timer={sharedTimer} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} />;
   else if (tab === "practice") page = <PracticeView practices={practices} setPractices={setPractices} flash={flash} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} timer={sharedTimer} taskPresets={taskPresets} setTaskPresets={setTaskPresets} />;
   else if (tab === "idiom") page = <IdiomView idioms={idioms} setIdioms={setIdioms} flash={flash} />;
   else if (tab === "mistakes") page = <MistakeView mistakes={mistakes} setMistakes={setMistakes} flash={flash} />;
@@ -1437,7 +1464,7 @@ function SleepTrend() {
 }
 
 
-function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions, flash }: { presets: StudyTaskPreset[]; setPresets: Dispatch<SetStateAction<StudyTaskPreset[]>>; tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; moduleOptions: string[]; flash: (x: string) => void }) {
+function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setSessions, moduleOptions, studySessionUndo, setStudySessionUndo, undoStudySessionChange, flash }: { presets: StudyTaskPreset[]; setPresets: Dispatch<SetStateAction<StudyTaskPreset[]>>; tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; moduleOptions: string[]; studySessionUndo: StudySessionUndo | null; setStudySessionUndo: Dispatch<SetStateAction<StudySessionUndo | null>>; undoStudySessionChange: () => void; flash: (x: string) => void }) {
   type PlanFrequency = "daily" | "weekdays" | "custom" | "dates";
   const [title, setTitle] = useState(""), [subject, setSubject] = useState(moduleOptions[0] || "资料分析"), [totalLessons, setTotalLessons] = useState(12), [startLesson, setStartLesson] = useState(1), [startLessonInput, setStartLessonInput] = useState("1"), [editingId, setEditingId] = useState<number | null>(null);
   const [taskType, setTaskType] = useState<StudyTaskKind>("course"), [subtasks, setSubtasks] = useState<StudySubtask[]>([]), [subtaskTitle, setSubtaskTitle] = useState(""), [subtaskMinutes, setSubtaskMinutes] = useState("30");
@@ -1448,7 +1475,6 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
   const [planSpecificDates, setPlanSpecificDates] = useState<string[]>([]), [planSpecificMonth, setPlanSpecificMonth] = useState(localISO().slice(0, 7));
   const [planMinutes, setPlanMinutes] = useState(45), [planMinutesInput, setPlanMinutesInput] = useState("45"), [planStartTime, setPlanStartTime] = useState("");
   const [followPresetId, setFollowPresetId] = useState<number | null>(null), [followStartDate, setFollowStartDate] = useState(localISO());
-  useEffect(() => { if (moduleOptions.length && !moduleOptions.includes(subject)) setSubject(moduleOptions[0]); }, [moduleOptions, subject]);
   useEffect(() => {
     setHistorySelection(current => normalizedLessonNumbers(current, totalLessons));
     setLegacyUndated(current => normalizedLessonNumbers(current, totalLessons));
@@ -1492,6 +1518,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById("task-schedule-planner")?.scrollIntoView({ behavior: "smooth", block: "start" })));
   };
   const ordered = [...presets].sort((a, b) => (a.order ?? a.id) - (b.order ?? b.id));
+  const taskSubjectOptions = Array.from(new Set([...moduleOptions, ...presets.map(item => item.subject), ...tasks.map(item => item.subject), subject].filter(Boolean)));
   const planningPreset = ordered.find(item => item.id === planningPresetId) || null;
   const [detailPresetId, setDetailPresetId] = useState<number | null>(null);
   const detailPreset = ordered.find(item => item.id === detailPresetId) || null;
@@ -1546,6 +1573,15 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
       return [...preserved, ...historical];
     });
   };
+  const syncPresetStudySessions = (presetId: number, presetTitle: string, nextSubject: string) => {
+    const linked = sessions.filter(session => studySessionMatchesPreset(session, presetId, presetTitle, tasks));
+    const changed = linked.filter(session => session.module !== nextSubject || session.linkedTaskSubject !== nextSubject || session.linkedPresetId !== presetId);
+    if (!changed.length) return 0;
+    setStudySessionUndo({ label: `同步“${presetTitle}”的历史学习模块（${changed.length}条）`, previous: changed.map(session => ({ ...session })), updatedAt: Date.now() });
+    const changedIds = new Set(changed.map(session => session.id));
+    setSessions(current => current.map(session => changedIds.has(session.id) ? { ...session, module: nextSubject, linkedTaskSubject: nextSubject, linkedPresetId: presetId } : session));
+    return changed.length;
+  };
   const savePreset = (event: FormEvent) => {
     event.preventDefault();
     const clean = title.trim(), firstLesson = Math.max(1, Math.round(Number(startLessonInput) || startLesson || 1));
@@ -1574,7 +1610,8 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
         const total = Math.max(1, Math.round(totalLessons));
         setPresets(current => current.map(item => item.id === editingId ? { ...item, ...followFields, title: clean, subject, taskType: "composite", subtasks: cleanSubtasks, totalLessons: total, startLesson: firstLesson, completedLessons: normalizedLessonNumbers(item.completedLessons, total), lessonCompletionDates: Object.fromEntries(Object.entries(item.lessonCompletionDates || {}).filter(([lesson]) => Number(lesson) >= 1 && Number(lesson) <= total)) } : item));
         setTasks(current => current.map(task => task.presetId === editingId ? { ...task, subject, subtaskIds: (task.subtaskIds || []).filter(id => validIds.has(id)), title: task.subtaskIds?.length ? compositeLessonTaskTitle({ title: clean, startLesson: firstLesson, subtasks: cleanSubtasks }, normalizedLessonNumbers(taskLessonNumbers(task), total), task.subtaskIds.filter(id => validIds.has(id))) : task.title } : task));
-        resetEditor(); flash("复合学习任务与子任务已更新");
+        const syncedSessionCount = syncPresetStudySessions(editingId, existingPreset?.title || clean, subject);
+        resetEditor(); flash(`复合学习任务与子任务已更新${syncedSessionCount ? `；同步了 ${syncedSessionCount} 条历史学习记录，可撤回` : ""}`);
       } else {
         if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
         const id = Date.now(), nextOrder = presets.length ? Math.min(...presets.map(item => item.order ?? item.id)) - 10 : 10;
@@ -1591,7 +1628,8 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
       setPresets(current => current.map(item => item.id === editingId ? { ...item, ...followFields, title: clean, subject, taskType: "course", subtasks: undefined, totalLessons: total, startLesson: firstLesson, completedLessons, lessonCompletionDates: { ...historyDates } } : item));
       setTasks(current => current.map(task => task.presetId === editingId && !task.historyPresetRecord ? { ...task, subject, title: taskLessonNumbers(task).length ? presetTaskTitle({ title: clean, startLesson: firstLesson }, taskLessonNumbers(task)) : task.title } : task));
       syncHistoricalCalendarTasks(editingId, clean, subject, firstLesson, historyDates);
-      resetEditor(); flash("学习任务与完成进度已更新；有日期的历史记录已同步到月历");
+      const syncedSessionCount = syncPresetStudySessions(editingId, existingPreset?.title || clean, subject);
+      resetEditor(); flash(`学习任务与完成进度已更新；有日期的历史记录已同步到月历${syncedSessionCount ? `；另同步了 ${syncedSessionCount} 条学习时长记录，可撤回` : ""}`);
     } else {
       if (presets.some(item => item.title.trim() === clean && item.subject === subject)) { flash("已经存在同名同模块的预设任务"); return; }
       const id = Date.now();
@@ -1862,10 +1900,10 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, moduleOptions,
     <section className="task-deadline-overview panel"><div className="panel-title"><div><h2>任务结束日期总览</h2><p>普通课程和复合任务都按课时统计；复合任务的每一课再细分为固定子任务。</p></div><span>{ordered.length} 项</span></div><div className="task-deadline-grid">{ordered.length ? ordered.map(preset => { if (presetIsComposite(preset)) { const stats = compositeStats(preset), finished = stats.doneRuns.length >= preset.totalLessons; return <article key={preset.id}><div><strong>{preset.title}</strong><span>{preset.subject} · 复合任务 · {preset.totalLessons}课</span></div><b>{finished ? "已完成" : stats.expectedEnd ? `预计 ${formatShortDate(stats.expectedEnd)} 完成` : `还差 ${stats.missing} 课未排`}</b>{finished && stats.completedAt ? <small>最后完成：{formatShortDate(stats.completedAt)}</small> : stats.expectedEnd ? <small>最后一课排到 {formatShortDate(stats.expectedEnd)}</small> : <small>点击下方“进度排期”，每课都会包含全部子任务</small>}</article>; } const stats = scheduleStats(preset); const finished = stats.completed.size >= preset.totalLessons; return <article key={preset.id}><div><strong>{preset.title}</strong><span>{preset.subject}</span></div><b>{finished ? "已完成" : stats.expectedEnd ? `预计 ${formatShortDate(stats.expectedEnd)} 完成` : `还差 ${stats.missing} 课未排`}</b>{finished && stats.completedAt ? <small>最后完成：{formatShortDate(stats.completedAt)}</small> : stats.expectedEnd ? <small>最后一项已排到 {formatShortDate(stats.expectedEnd)}</small> : <small>点击下方“进度排期”生成月历计划</small>}</article>; }) : <p className="task-deadline-empty">还没有预设学习任务。</p>}</div></section>
     <section className="task-library-layout">
       <form className="panel form-card task-preset-form" onSubmit={savePreset}>
-        <PanelTitle title={editingId === null ? "新增预设任务" : "修改预设任务"} />
+        <div className="task-preset-form-heading"><PanelTitle title={editingId === null ? "新增预设任务" : "修改预设任务"} />{studySessionUndo && <button type="button" className="study-session-undo-button" title={studySessionUndo.label} onClick={undoStudySessionChange}>↶ 撤回上次修改</button>}</div>
         <label>任务名称<input value={title} onChange={e => setTitle(e.target.value)} placeholder="例如：张弓十二箭 / 粉笔模考复盘" /></label>
         <div className="task-type-switch"><button type="button" className={taskType === "course" ? "active" : ""} onClick={() => setTaskType("course")}><strong>普通课程</strong><span>按第1课、第2课…管理</span></button><button type="button" className={taskType === "composite" ? "active" : ""} onClick={() => setTaskType("composite")}><strong>复合任务</strong><span>按课时推进，每课含固定子任务</span></button></div>
-        <label>学习模块<select value={subject} onChange={e => setSubject(e.target.value)}>{moduleOptions.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label>学习模块<select value={subject} onChange={e => setSubject(e.target.value)}>{taskSubjectOptions.map(item => <option key={item}>{item}</option>)}</select></label>
         <div className={`follow-schedule-editor ${followPresetId ? "active" : ""}`}><div className="follow-schedule-head"><div><strong>跟随已有任务排期（可选）</strong><small>例如“行测复盘”跟随“行测”：行测安排在哪一天，复盘就会自动在同一天生成一项；源任务后续改期也会同步。</small></div>{followPresetId ? <span>持续同步</span> : null}</div><div className="follow-schedule-fields"><label>参照任务<select value={followPresetId || ""} onChange={e => { const nextId = Number(e.target.value) || null; setFollowPresetId(nextId); if (nextId && editingId === null) setFollowStartDate(localISO()); }}><option value="">不跟随，独立排期</option>{ordered.filter(item => item.id !== editingId).map(item => <option key={item.id} value={item.id}>{item.title} · {item.subject}</option>)}</select></label>{followPresetId ? <label>从哪天开始同步<input type="date" value={followStartDate} onChange={e => setFollowStartDate(e.target.value)} /></label> : null}</div>{followPresetId ? <p>只同步“日期”，不会复制对方的具体开始/结束时间。已完成的本任务记录会保留，不会因源任务以后改期而回退。</p> : null}</div>
         {taskType === "course" ? <>
           <div className="form-grid task-numbering-grid"><label>总课时<DraftNumberInput min={1} value={totalLessons} onValueChange={setTotalLessons} /></label><label>起始课号<input type="number" min="1" max="9999" value={startLessonInput} onChange={e => changeStartLesson(e.target.value)} onBlur={commitStartLesson} /><small>例如填32，则本任务编号为第32课起</small></label></div><p className="task-numbering-preview">当前编号范围：第 <b>{startLesson}</b> 课 ～ 第 <b>{startLesson + totalLessons - 1}</b> 课；内部进度按课时顺序保存。</p>
@@ -2290,7 +2328,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   </div>;
 }
 
-function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash, timer, moduleOptions, setModuleOptions }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; tasks: Task[]; routines: DailyRoutine[]; taskPresets: StudyTaskPreset[]; flash: (x: string) => void; timer: TimerShared; moduleOptions: string[]; setModuleOptions: Dispatch<SetStateAction<string[]>> }) {
+function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, studySessionUndo, setStudySessionUndo, undoStudySessionChange, flash, timer, moduleOptions, setModuleOptions }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; tasks: Task[]; routines: DailyRoutine[]; taskPresets: StudyTaskPreset[]; studySessionUndo: StudySessionUndo | null; setStudySessionUndo: Dispatch<SetStateAction<StudySessionUndo | null>>; undoStudySessionChange: () => void; flash: (x: string) => void; timer: TimerShared; moduleOptions: string[]; setModuleOptions: Dispatch<SetStateAction<string[]>> }) {
   const [date, setDate] = useStoredState<string>("shore-study-selected-date", localISO()), [module, setModule] = useState(moduleOptions[0] || "资料分析");
   const [recordTitle, setRecordTitle] = useState(""), [recordSource, setRecordSource] = useState(""), [recordNote, setRecordNote] = useState(""), [recordTaskKey, setRecordTaskKey] = useState("");
   const [startTime, setStartTime] = useState("19:00"), [endTime, setEndTime] = useState("20:00"), [editingId, setEditingId] = useState<number | null>(null);
@@ -2315,7 +2353,8 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
   const shiftStudyModule = (id: StudyModuleId, direction: -1 | 1) => setStudyModuleOrder(current => { const next = normalizeStudyModuleOrder(current); const from = next.indexOf(id), to = from + direction; if (from < 0 || to < 0 || to >= next.length) return next; [next[from], next[to]] = [next[to], next[from]]; return next; });
   const days = Array.from({ length: 7 }, (_, i) => addDays(i - 6));
   const daily = days.map(day => ({ day, seconds: sessions.filter(s => normalizedDate(s.date) === day).reduce((sum, s) => sum + s.seconds, 0) + (day === localISO() ? timer.activeSeconds : 0) }));
-  const studyModules = Array.from(new Set([...moduleOptions, ...sessions.map(session => session.module), timer.timerModule].filter(Boolean)));
+  const studyModules = Array.from(new Set([...moduleOptions, ...sessions.map(session => session.module), ...tasks.map(task => task.subject), ...routines.map(routine => routine.subject), ...taskPresets.map(preset => preset.subject), timer.timerModule].filter(Boolean)));
+  const recordModuleOptions = Array.from(new Set([...moduleOptions, ...sessions.map(session => session.module), ...tasks.map(task => task.subject), ...routines.map(routine => routine.subject), ...taskPresets.map(preset => preset.subject), module].filter(Boolean)));
   const distributionRows = distributionScope === "all" ? sessions : sessions.filter(session => normalizedDate(session.date).slice(0, 7) === distributionMonth);
   const distributionIncludesActive = distributionScope === "all" || localISO().slice(0, 7) === distributionMonth;
   const moduleStats = studyModules.map(m => ({ module: m, seconds: distributionRows.filter(s => s.module === m).reduce((sum, s) => sum + s.seconds, 0) + (distributionIncludesActive && timer.timerOn && timer.timerModule === m ? timer.activeSeconds : 0) }));
@@ -2372,7 +2411,7 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
   });
   const heatTotal = heatData.reduce((sum, x) => sum + x.seconds, 0), studiedDays = heatData.filter(x => x.seconds > 0).length;
   const selectedSessions = sessions.filter(s => normalizedDate(s.date) === selectedHeatDay);
-  type StudyTaskChoice = { key: string; title: string; subject: string; start?: string; end?: string; timeLabel: string; kind: string; done: boolean; trackingLabel?: string; originalLinked?: boolean };
+  type StudyTaskChoice = { key: string; title: string; subject: string; start?: string; end?: string; timeLabel: string; kind: string; done: boolean; trackingLabel?: string; originalLinked?: boolean; presetId?: number; lessonNumbers?: number[]; subtaskIds?: string[] };
   const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
   const taskTrackingLabel = (task: Task) => {
     if (task.presetId === undefined && !task.followSourcePresetId && !task.presetAutoPlan) return "";
@@ -2392,6 +2431,9 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
     done: task.done,
     trackingLabel: taskTrackingLabel(task) || undefined,
     originalLinked,
+    presetId: task.presetId,
+    lessonNumbers: taskLessonNumbers(task),
+    subtaskIds: task.subtaskIds?.length ? [...task.subtaskIds] : undefined,
   });
   const taskChoicesFor = (targetDate: string): StudyTaskChoice[] => [
     ...routines.filter(r => r.month === targetDate.slice(0, 7) && routineApplies(r, targetDate)).map(r => ({ key: makeTaskKey("routine", r.id), title: r.title, subject: r.subject, start: r.plannedStart, end: r.plannedEnd, timeLabel: formatPlannedSlots(r), kind: "每日任务", done: r.completedDates.includes(targetDate) })),
@@ -2410,20 +2452,26 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
       const direct = tasks.find(item => item.id === id);
       if (direct) return taskChoiceFromTask(direct, true);
     }
+    const exactTitle = session.linkedTaskTitle || session.title || session.module;
     const inferredPreset = session.linkedPresetId !== undefined
       ? presetMap.get(session.linkedPresetId)
-      : taskPresets.find(preset => Boolean(session.linkedTaskTitle || session.title) && (session.linkedTaskTitle || session.title || "").startsWith(preset.title));
+      : taskPresets.find(preset => Boolean(exactTitle) && (exactTitle === preset.title || exactTitle.startsWith(`${preset.title} 第`) || exactTitle.startsWith(`${preset.title} ·`)));
     if (inferredPreset) {
       const lessonSet = new Set(session.linkedLessonNumbers || []);
       const samePresetTasks = tasks.filter(task => task.presetId === inferredPreset.id && !task.migrationHidden);
-      const recovered = samePresetTasks.find(task => {
-        const taskLessons = taskLessonNumbers(task);
-        return lessonSet.size ? taskLessons.some(lesson => lessonSet.has(lesson)) : task.title === (session.linkedTaskTitle || session.title);
-      }) || samePresetTasks.find(task => task.title === (session.linkedTaskTitle || session.title));
+      const lessonMatches = samePresetTasks.filter(task => lessonSet.size ? taskLessonNumbers(task).some(lesson => lessonSet.has(lesson)) : task.title === exactTitle);
+      const exactMatches = lessonMatches.filter(task => task.title === exactTitle);
+      const sameDateMatches = lessonMatches.filter(task => normalizedDate(task.date) === normalizedDate(session.date));
+      const rankedMatches = exactMatches.length ? exactMatches : sameDateMatches.length ? sameDateMatches : lessonMatches;
+      const uniqueDoneMatches = rankedMatches.filter(task => task.done);
+      const recovered = rankedMatches.length === 1 ? rankedMatches[0] : uniqueDoneMatches.length === 1 ? uniqueDoneMatches[0] : undefined;
       if (recovered) return taskChoiceFromTask(recovered, true);
     }
-    const exactTitle = session.linkedTaskTitle || session.title || session.module;
-    const sameTitle = tasks.find(task => task.title === exactTitle && task.subject === (session.linkedTaskSubject || session.module));
+    const sameTitleMatches = tasks.filter(task => task.title === exactTitle && task.subject === (session.linkedTaskSubject || session.module));
+    const sameTitleDateMatches = sameTitleMatches.filter(task => normalizedDate(task.date) === normalizedDate(session.date));
+    const rankedTitleMatches = sameTitleDateMatches.length ? sameTitleDateMatches : sameTitleMatches;
+    const uniqueDoneTitleMatches = rankedTitleMatches.filter(task => task.done);
+    const sameTitle = rankedTitleMatches.length === 1 ? rankedTitleMatches[0] : uniqueDoneTitleMatches.length === 1 ? uniqueDoneTitleMatches[0] : undefined;
     if (sameTitle) return taskChoiceFromTask(sameTitle, true);
     const snapshotPreset = session.linkedPresetId !== undefined ? presetMap.get(session.linkedPresetId) : inferredPreset;
     const snapshotLessons = session.linkedLessonNumbers || [];
@@ -2436,10 +2484,13 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
       done: false,
       trackingLabel: snapshotPreset ? ["进度跟踪", snapshotPreset.title, snapshotLessons.length ? `第${formatPresetLessonSelection(snapshotPreset, snapshotLessons)}课` : ""].filter(Boolean).join(" · ") : "原关联任务",
       originalLinked: true,
+      presetId: snapshotPreset?.id ?? session.linkedPresetId,
+      lessonNumbers: snapshotLessons,
+      subtaskIds: session.linkedSubtaskIds,
     };
   };
   const todayChoices = taskChoicesFor(localISO()).sort((a, b) => Number(a.done) - Number(b.done) || ((timeMinutes(a.start) ?? 1440) - (timeMinutes(b.start) ?? 1440)));
-  const baseManualChoices = taskChoicesFor(date);
+  const baseManualChoices = taskChoicesFor(date).sort((a, b) => Number(b.done) - Number(a.done) || ((timeMinutes(a.start) ?? 1440) - (timeMinutes(b.start) ?? 1440)));
   const linkedEditChoice = linkedChoiceForSession(editingSession);
   const manualChoices = linkedEditChoice ? [linkedEditChoice, ...baseManualChoices.filter(choice => choice.key !== linkedEditChoice.key)] : baseManualChoices;
   const sourceOptions = Array.from(new Set([...sources, ...sessions.map(s => s.source || "").filter(Boolean), timer.timerSource].filter(Boolean)));
@@ -2450,18 +2501,27 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
     const selected = todayChoices.find(choice => choice.key === timer.timerTaskKey);
     if (selected?.done) { timer.setTimerTaskKey(""); timer.setTimerTitle(""); }
   }, [tasks, routines, timer.timerOn, timer.timerTaskKey]);
-  const selectRecordTask = (choice: StudyTaskChoice) => { setRecordTaskKey(choice.key); setRecordTitle(choice.title); setModule(ensureSharedModule(choice.subject)); };
+  const selectRecordTask = (choice: StudyTaskChoice) => { setRecordTaskKey(choice.key); setRecordTitle(choice.title); if (editingId === null) setModule(ensureSharedModule(choice.subject)); };
   const addManual = (e: FormEvent) => {
     e.preventDefault();
     if (!recordTitle.trim()) { flash("请选择当日任务或填写具体学习内容"); return; }
     const finalMinutes = studyRangeMinutes(startTime, endTime);
     if (finalMinutes === null) { flash("学习记录的开始时间和结束时间不能相同"); return; }
     if (finalMinutes > 720 && !window.confirm(`这条学习记录达到 ${Math.round(finalMinutes / 60 * 10) / 10} 小时，超过12小时。确认记录无误吗？`)) return;
-    const row: Omit<StudySession, "id"> = { date: normalizedDate(date), module: module.trim() || "其他计划", title: recordTitle.trim(), source: recordSource.trim() || undefined, note: recordNote.trim() || undefined, ...linkedTaskSnapshot(recordTaskKey || undefined, tasks, routines), seconds: finalMinutes * 60, startTime, endTime };
+    const previousSession = editingId !== null ? sessions.find(session => session.id === editingId) : undefined;
+    const selectedChoice = manualChoices.find(choice => choice.key === recordTaskKey);
+    const freshLinkSnapshot = linkedTaskSnapshot(recordTaskKey || undefined, tasks, routines);
+    const retainedLinkSnapshot = recordTaskKey && previousSession?.linkedTaskKey === recordTaskKey && !freshLinkSnapshot.linkedTaskTitle
+      ? { ...freshLinkSnapshot, linkedTaskTitle: previousSession.linkedTaskTitle || selectedChoice?.title || previousSession.title || recordTitle.trim(), linkedTaskSubject: previousSession.linkedTaskSubject || selectedChoice?.subject || previousSession.module, linkedPresetId: previousSession.linkedPresetId ?? selectedChoice?.presetId, linkedLessonNumbers: previousSession.linkedLessonNumbers || selectedChoice?.lessonNumbers, linkedSubtaskIds: previousSession.linkedSubtaskIds || selectedChoice?.subtaskIds }
+      : !freshLinkSnapshot.linkedTaskTitle && selectedChoice?.originalLinked
+        ? { ...freshLinkSnapshot, linkedTaskTitle: selectedChoice.title, linkedTaskSubject: selectedChoice.subject, linkedPresetId: selectedChoice.presetId, linkedLessonNumbers: selectedChoice.lessonNumbers, linkedSubtaskIds: selectedChoice.subtaskIds }
+        : freshLinkSnapshot;
+    const row: Omit<StudySession, "id"> = { date: normalizedDate(date), module: module.trim() || "其他计划", title: recordTitle.trim(), source: recordSource.trim() || undefined, note: recordNote.trim() || undefined, ...retainedLinkSnapshot, seconds: finalMinutes * 60, startTime, endTime };
     if (editingId !== null) {
+      if (previousSession) setStudySessionUndo({ label: `修改 ${formatShortDate(previousSession.date)} 学习记录`, previous: [{ ...previousSession }], updatedAt: Date.now() });
       setSessions(current => current.map(session => session.id === editingId ? { ...session, ...row } : session));
       setEditingId(null);
-      flash("学习记录已修改，学习模块、时长和实际时间轴已同步");
+      flash("学习记录已修改；如有误，可在最近学习记录中撤回");
     } else {
       setSessions(current => [...current, { id: Date.now(), ...row }]);
       flash("学习记录已补录，并同步到实际时间轴");
@@ -2477,8 +2537,8 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, flash,
     if (id === "distribution") return <div className="panel study-distribution-panel"><div className="panel-title study-panel-title-with-tabs"><div><h2>模块投入分布</h2><p>{distributionScope === "month" ? `${distributionMonth} 各模块投入` : "全部历史记录的模块投入"}</p></div><div className="range-tabs"><button type="button" className={distributionScope === "month" ? "active" : ""} onClick={() => setDistributionScope("month")}>月投入</button><button type="button" className={distributionScope === "all" ? "active" : ""} onClick={() => setDistributionScope("all")}>总体投入</button></div></div>{distributionScope === "month" && <div className="distribution-month-row"><label>查看月份<input type="month" value={distributionMonth} onChange={e => setDistributionMonth(e.target.value)} /></label><span>可切换任意月份，不影响月历热力图当前月份。</span></div>}<div className="horizontal-bars">{moduleStats.some(x => x.seconds > 0) ? moduleStats.map(x => <div key={x.module}><span>{x.module}</span><div><i style={{ width: `${x.seconds / maxModule * 100}%` }} /></div><strong>{Math.round(x.seconds / 360) / 10}h</strong></div>) : <Empty text={distributionScope === "month" ? "这个月还没有学习计时" : "还没有学习计时记录"} />}</div></div>;
     if (id === "timeband") return <div className="panel study-timeband-panel"><div className="panel-title"><div><h2>学习时间段分布</h2><p>同一张图比较“今天”和“近7天日均”，更直观看出这一周最常在哪些时段学习。</p></div><div className="timeband-legend"><span><i className="today" />今天</span><span><i className="week" />近7天日均</span></div></div><div className="timeband-summary-grid"><div><strong>{Math.round(todayTimeBandMinutes / 6) / 10}h</strong><span>今天已记录</span></div><div><strong>{Math.round(weekTimeBandMinutes / 42) / 10}h</strong><span>近7天日均</span></div><div className="timeband-frequent"><span>本周高频时段</span><strong>{frequentTimeBands.length ? frequentTimeBands.map(item => `${item.label}（${item.studyDays}天）`).join(" · ") : "暂无足够记录"}</strong></div></div><div className="timeband-chart grouped">{timeBands.map(item => <div className="timeband-column" key={item.label} title={`${item.label} · 今天 ${Math.round(item.todayMinutes)} 分钟 · 近7天日均 ${Math.round(item.weekAverageMinutes)} 分钟 · 本周 ${item.studyDays} 天在此时段学习`}><span>{item.studyDays ? `${item.studyDays}天` : ""}</span><div className="timeband-pair"><i className="today" style={{ height: `${item.todayMinutes ? Math.max(4, item.todayMinutes / maxTimeBand * 118) : 2}px` }} /><i className="week" style={{ height: `${item.weekAverageMinutes ? Math.max(4, item.weekAverageMinutes / maxTimeBand * 118) : 2}px` }} /></div><small>{item.label}</small></div>)}</div><p className="timeband-note">每组左柱=今天该时段学习分钟数，右柱=近7天该时段的日均学习分钟数；柱顶“X天”表示本周有多少天在该时段学习。未填写开始/结束时间的历史记录不会计入。</p></div>;
     if (id === "heatmap") return <section className="panel study-heatmap-panel"><div className="heatmap-head"><div><p className="eyebrow">MONTHLY FOCUS</p><h2>月历学习时长</h2><span>颜色越深，代表当天投入时间越长。</span></div><input className="month-picker" type="month" value={heatMonth} onChange={e => setHeatMonth(e.target.value)} /></div><div className="heatmap-summary"><div><strong>{formatHours(heatTotal)}</strong><span>本月累计</span></div><div><strong>{studiedDays}</strong><span>学习天数</span></div><div><strong>{studiedDays ? formatHours(Math.round(heatTotal / studiedDays)) : "0h 0m"}</strong><span>日均时长</span></div><div className="selected-day-summary"><strong>{formatHours(heatData.find(item => item.day === selectedHeatDay)?.seconds || 0)}</strong><span>{formatShortDate(selectedHeatDay)} 当日时长</span></div></div><div className="heatmap-week">{["一", "二", "三", "四", "五", "六", "日"].map(x => <span key={x}>周{x}</span>)}</div><div className="study-heatmap">{heatCells.map((day, i) => day === null ? <div className="heat-day blank" key={`hb${i}`} /> : (() => { const item = heatData[day - 1]; return <button className={`heat-day level-${item.level} ${item.day === localISO() ? "today" : ""} ${item.day === selectedHeatDay ? "selected" : ""}`} key={item.day} onClick={() => { setDate(item.day); setSelectedHeatDay(item.day); }} title={`${item.day} · ${formatHours(item.seconds)}`}><span>{day}</span><strong>{item.seconds ? formatHours(item.seconds) : "—"}</strong></button>; })())}</div><div className="heat-legend"><span>少</span>{[0, 1, 2, 3, 4, 5].map(x => <i className={`level-${x}`} key={x} />)}<span>多</span><small>0 · ≤1h · 1–2h · 2–4h · 4–6h · ≥6h</small></div><div className="day-history"><div><h3>{selectedHeatDay} 学习历史</h3><strong>{formatHours(selectedSessions.reduce((sum, x) => sum + x.seconds, 0))}</strong></div>{selectedSessions.length ? selectedSessions.map(item => <article key={item.id}><span>{formatStudyRange(item.startTime, item.endTime)}</span><div><strong>{sessionDisplayTitle(item, tasks, routines)}</strong><small>{sessionDisplayModule(item, tasks, routines)}{item.source ? ` · ${item.source}` : ""}{item.note ? ` · 备注：${item.note}` : ""}{item.linkedTaskKey ? " · 已关联计划" : ""}</small></div><em>{formatHours(item.seconds)}</em></article>) : <p>当天还没有学习记录。</p>}</div></section>;
-    if (id === "manual") return <form className="panel form-card study-manual-panel" onSubmit={addManual}><PanelTitle title={editingId === null ? "补录学习时长" : "修改学习记录"} /><label className="manual-task-label">选择该日计划任务<div className="focus-task-tags manual">{manualChoices.length ? manualChoices.map(choice => <button type="button" className={`${recordTaskKey === choice.key ? "active" : ""} ${choice.done ? "done" : ""} ${choice.originalLinked ? "original-linked-task" : ""}`.trim()} key={choice.key} onClick={() => selectRecordTask(choice)}><strong>{choice.title}</strong><small>{choice.originalLinked ? "↩ 原关联 · " : ""}{choice.trackingLabel ? `${choice.trackingLabel} · ` : ""}{choice.done ? "✓ 已完成 · " : ""}{choice.timeLabel !== "待定" ? `${choice.timeLabel} · ` : ""}{choice.subject}</small></button>) : <small>该日期没有计划任务，可直接填写具体内容。</small>}<button type="button" className={!recordTaskKey ? "active custom" : "custom"} onClick={() => { setRecordTaskKey(""); setRecordTitle(""); }}>＋ 自定义内容</button></div></label><div className="form-grid"><label>学习日期<input type="date" value={date} onChange={e => { setDate(e.target.value); if (editingId === null) { setRecordTaskKey(""); setRecordTitle(""); } }} /></label><label>学习模块<select value={module} onChange={e => setModule(e.target.value)}>{moduleOptions.map(m => <option key={m}>{m}</option>)}</select><small>修改后会同步到最近记录、模块统计和实际时间轴</small></label><label className="full-field">具体学习内容<input value={recordTitle} onChange={e => { setRecordTitle(e.target.value); setRecordTaskKey(""); }} placeholder="例如：资料分析第5组限时训练" /></label><label className="full-field">练习/资料来源<input list="manual-source-options" value={recordSource} onChange={e => setRecordSource(e.target.value)} placeholder="例如：粉笔题库、超大杯、真题册，可自定义" /></label><label className="full-field">备注<input value={recordNote} onChange={e => setRecordNote(e.target.value)} placeholder="可选，例如：中途休息10分钟、重点复盘某题" /></label><label>开始时间<input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label><label>结束时间<input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></label><label>自动计算时长<input readOnly value={studyRangeMinutes(startTime, endTime) !== null ? `${studyRangeMinutes(startTime, endTime)} 分钟${studyCrossesMidnight(startTime, endTime) ? "（跨至次日）" : ""}` : "时间范围无效"} /><small>结束时间早于开始时间时，自动按次日结束计算；开始和结束相同才无效</small></label><div className="manual-form-actions"><button className="primary-button">{editingId === null ? "保存时长" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button cancel-edit" onClick={() => { setEditingId(null); setRecordTitle(""); setRecordSource(""); setRecordNote(""); setRecordTaskKey(""); }}>取消修改</button>}</div></div><datalist id="manual-source-options">{sourceOptions.map(item => <option key={item} value={item} />)}</datalist></form>;
-    return <div className="panel study-recent-panel"><PanelTitle title="最近学习记录" /><div className="session-list study-recent-scroll">{sessions.slice().reverse().map(session => <div key={session.id}><span>{formatShortDate(session.date)}<small>{session.startTime && formatStudyRange(session.startTime, session.endTime)}</small></span><div className="session-task-copy"><strong>{sessionDisplayTitle(session, tasks, routines)}</strong><small>{sessionDisplayModule(session, tasks, routines)}{session.source ? ` · ${session.source}` : ""}{session.note ? ` · 备注：${session.note}` : ""}{session.linkedTaskKey ? " · 已关联当日计划" : ""}</small></div><em>{formatHours(session.seconds)}</em><span className="row-actions"><button onClick={() => editSession(session)}>修改</button><button onClick={() => { setSessions(sessions.filter(x => x.id !== session.id)); if (editingId === session.id) setEditingId(null); }}>删除</button></span></div>)}</div></div>;
+    if (id === "manual") return <form className="panel form-card study-manual-panel" onSubmit={addManual}><PanelTitle title={editingId === null ? "补录学习时长" : "修改学习记录"} /><label className="manual-task-label">选择该日计划任务<small className="manual-task-safety-note">已完成和未完成的任务都会显示；修改历史记录时不会自动改绑到其他未完成任务。</small><div className="focus-task-tags manual">{manualChoices.length ? manualChoices.map(choice => <button type="button" className={`${recordTaskKey === choice.key ? "active" : ""} ${choice.done ? "done" : ""} ${choice.originalLinked ? "original-linked-task" : ""}`.trim()} key={choice.key} onClick={() => selectRecordTask(choice)}><strong>{choice.title}</strong><small>{choice.originalLinked ? "↩ 原关联 · " : ""}{choice.trackingLabel ? `${choice.trackingLabel} · ` : ""}{choice.done ? "✓ 已完成 · " : ""}{choice.timeLabel !== "待定" ? `${choice.timeLabel} · ` : ""}{choice.subject}</small></button>) : <small>该日期没有计划任务，可直接填写具体内容。</small>}<button type="button" className={!recordTaskKey ? "active custom" : "custom"} onClick={() => { setRecordTaskKey(""); setRecordTitle(""); }}>＋ 自定义内容</button></div></label><div className="form-grid"><label>学习日期<input type="date" value={date} onChange={e => { setDate(e.target.value); if (editingId === null) { setRecordTaskKey(""); setRecordTitle(""); } }} /></label><label>学习模块<select value={module} onChange={e => setModule(e.target.value)}>{recordModuleOptions.map(m => <option key={m}>{m}</option>)}</select><small>修改后会同步到最近记录、模块统计和实际时间轴；历史记录可独立选择所属模块</small></label><label className="full-field">具体学习内容<input value={recordTitle} onChange={e => { setRecordTitle(e.target.value); setRecordTaskKey(""); }} placeholder="例如：资料分析第5组限时训练" /></label><label className="full-field">练习/资料来源<input list="manual-source-options" value={recordSource} onChange={e => setRecordSource(e.target.value)} placeholder="例如：粉笔题库、超大杯、真题册，可自定义" /></label><label className="full-field">备注<input value={recordNote} onChange={e => setRecordNote(e.target.value)} placeholder="可选，例如：中途休息10分钟、重点复盘某题" /></label><label>开始时间<input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></label><label>结束时间<input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></label><label>自动计算时长<input readOnly value={studyRangeMinutes(startTime, endTime) !== null ? `${studyRangeMinutes(startTime, endTime)} 分钟${studyCrossesMidnight(startTime, endTime) ? "（跨至次日）" : ""}` : "时间范围无效"} /><small>结束时间早于开始时间时，自动按次日结束计算；开始和结束相同才无效</small></label><div className="manual-form-actions"><button className="primary-button">{editingId === null ? "保存时长" : "保存修改"}</button>{editingId !== null && <button type="button" className="soft-button cancel-edit" onClick={() => { setEditingId(null); setRecordTitle(""); setRecordSource(""); setRecordNote(""); setRecordTaskKey(""); }}>取消修改</button>}</div></div><datalist id="manual-source-options">{sourceOptions.map(item => <option key={item} value={item} />)}</datalist></form>;
+    return <div className="panel study-recent-panel"><div className="study-recent-panel-heading"><PanelTitle title="最近学习记录" />{studySessionUndo && <button type="button" className="study-session-undo-button" title={studySessionUndo.label} onClick={undoStudySessionChange}>↶ 撤回上次修改</button>}</div><div className="session-list study-recent-scroll">{sessions.slice().reverse().map(session => <div key={session.id}><span>{formatShortDate(session.date)}<small>{session.startTime && formatStudyRange(session.startTime, session.endTime)}</small></span><div className="session-task-copy"><strong>{sessionDisplayTitle(session, tasks, routines)}</strong><small>{sessionDisplayModule(session, tasks, routines)}{session.source ? ` · ${session.source}` : ""}{session.note ? ` · 备注：${session.note}` : ""}{session.linkedTaskKey ? " · 已关联当日计划" : ""}</small></div><em>{formatHours(session.seconds)}</em><span className="row-actions"><button onClick={() => editSession(session)}>修改</button><button onClick={() => { setSessions(sessions.filter(x => x.id !== session.id)); if (editingId === session.id) setEditingId(null); }}>删除</button></span></div>)}</div></div>;
   };
   return <div className="page-stack study-time-page"><section className="page-intro"><div><p className="eyebrow">STUDY TIMER</p><h2>记录真正投入的时间</h2><p>选择当天具体任务后计时，最近记录和实际时间轴会使用同一个任务名称。</p></div><div className="study-today"><strong>{formatHours(timer.todaySeconds)}</strong><span>今日累计</span></div></section>
     <section className="study-module-sort-toolbar"><div><strong>学习计时模块布局</strong><span>顶部为专注概览；下方固定为“月历学习时长 + 最近学习记录 + 补录学习时长”的一屏记录工作区。</span></div><button type="button" onClick={() => setStudyModuleOrder([...studyModuleDefaults])}>恢复默认顺序</button></section>
