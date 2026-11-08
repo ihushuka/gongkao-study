@@ -610,7 +610,9 @@ export default function App() {
   const [routines, setRoutines] = useStoredState<DailyRoutine[]>("shore-daily-routines", []);
   const [practices, setPractices] = useStoredState<Practice[]>("shore-practices", seedPractices);
   const [sessions, setSessions] = useStoredState<StudySession[]>("shore-study-sessions", seedSessions);
-  const [studySessionUndo, setStudySessionUndo] = useStoredState<StudySessionUndo | null>("shore-study-session-undo", null);
+  const [studySessionUndoStack, setStudySessionUndoStack] = useStoredState<StudySessionUndo[]>("shore-study-session-undo-stack", []);
+  const studySessionUndo = studySessionUndoStack[studySessionUndoStack.length - 1] || null;
+  const recordStudySessionUndo = (entry: StudySessionUndo) => setStudySessionUndoStack(current => [...current.slice(-19), entry]);
   const [examDates, setExamDates] = useStoredState<ExamDates>("shore-exam-dates", { national: "", provincial: "" });
   const [mistakes, setMistakes] = useStoredState<Mistake[]>("shore-mistakes", seedMistakes);
   const [idioms, setIdioms] = useStoredState<Idiom[]>("shore-idioms", seedIdioms);
@@ -957,7 +959,7 @@ export default function App() {
       const missing = pending.previous.filter(session => !currentIds.has(session.id));
       return [...restored, ...missing];
     });
-    setStudySessionUndo(null);
+    setStudySessionUndoStack(current => current.slice(0, -1));
     flash(`已撤回：${pending.label}`);
   };
   useEffect(() => {
@@ -1015,8 +1017,8 @@ export default function App() {
   else if (tab === "daily") page = <DailyPlan tasks={tasks} setTasks={setTasks} routines={routines} setRoutines={setRoutines} sessions={sessions} setSessions={setSessions} timer={sharedTimer} />;
   else if (tab === "sleep") page = <SleepTrend />;
   else if (tab === "plan") page = <Plan tasks={tasks} setTasks={setTasks} routines={routines} setRoutines={setRoutines} flash={flash} moduleOptions={moduleOptions} taskPresets={taskPresets} />;
-  else if (tab === "tasklib") page = <StudyTaskManager presets={taskPresets} setPresets={setTaskPresets} tasks={tasks} setTasks={setTasks} sessions={sessions} setSessions={setSessions} moduleOptions={moduleOptions} studySessionUndo={studySessionUndo} setStudySessionUndo={setStudySessionUndo} undoStudySessionChange={undoStudySessionChange} flash={flash} />;
-  else if (tab === "study") page = <StudyTime sessions={sessions} setSessions={setSessions} tasks={tasks} routines={routines} taskPresets={taskPresets} studySessionUndo={studySessionUndo} setStudySessionUndo={setStudySessionUndo} undoStudySessionChange={undoStudySessionChange} flash={flash} timer={sharedTimer} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} />;
+  else if (tab === "tasklib") page = <StudyTaskManager presets={taskPresets} setPresets={setTaskPresets} tasks={tasks} setTasks={setTasks} sessions={sessions} setSessions={setSessions} moduleOptions={moduleOptions} studySessionUndo={studySessionUndo} recordStudySessionUndo={recordStudySessionUndo} undoStudySessionChange={undoStudySessionChange} flash={flash} />;
+  else if (tab === "study") page = <StudyTime sessions={sessions} setSessions={setSessions} tasks={tasks} routines={routines} taskPresets={taskPresets} studySessionUndo={studySessionUndo} recordStudySessionUndo={recordStudySessionUndo} undoStudySessionChange={undoStudySessionChange} flash={flash} timer={sharedTimer} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} />;
   else if (tab === "practice") page = <PracticeView practices={practices} setPractices={setPractices} flash={flash} moduleOptions={moduleOptions} setModuleOptions={setModuleOptions} timer={sharedTimer} taskPresets={taskPresets} setTaskPresets={setTaskPresets} />;
   else if (tab === "idiom") page = <IdiomView idioms={idioms} setIdioms={setIdioms} flash={flash} />;
   else if (tab === "mistakes") page = <MistakeView mistakes={mistakes} setMistakes={setMistakes} flash={flash} />;
@@ -1464,7 +1466,7 @@ function SleepTrend() {
 }
 
 
-function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setSessions, moduleOptions, studySessionUndo, setStudySessionUndo, undoStudySessionChange, flash }: { presets: StudyTaskPreset[]; setPresets: Dispatch<SetStateAction<StudyTaskPreset[]>>; tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; moduleOptions: string[]; studySessionUndo: StudySessionUndo | null; setStudySessionUndo: Dispatch<SetStateAction<StudySessionUndo | null>>; undoStudySessionChange: () => void; flash: (x: string) => void }) {
+function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setSessions, moduleOptions, studySessionUndo, recordStudySessionUndo, undoStudySessionChange, flash }: { presets: StudyTaskPreset[]; setPresets: Dispatch<SetStateAction<StudyTaskPreset[]>>; tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; moduleOptions: string[]; studySessionUndo: StudySessionUndo | null; recordStudySessionUndo: (entry: StudySessionUndo) => void; undoStudySessionChange: () => void; flash: (x: string) => void }) {
   type PlanFrequency = "daily" | "weekdays" | "custom" | "dates";
   const [title, setTitle] = useState(""), [subject, setSubject] = useState(moduleOptions[0] || "资料分析"), [totalLessons, setTotalLessons] = useState(12), [startLesson, setStartLesson] = useState(1), [startLessonInput, setStartLessonInput] = useState("1"), [editingId, setEditingId] = useState<number | null>(null);
   const [taskType, setTaskType] = useState<StudyTaskKind>("course"), [subtasks, setSubtasks] = useState<StudySubtask[]>([]), [subtaskTitle, setSubtaskTitle] = useState(""), [subtaskMinutes, setSubtaskMinutes] = useState("30");
@@ -1577,7 +1579,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setS
     const linked = sessions.filter(session => studySessionMatchesPreset(session, presetId, presetTitle, tasks));
     const changed = linked.filter(session => session.module !== nextSubject || session.linkedTaskSubject !== nextSubject || session.linkedPresetId !== presetId);
     if (!changed.length) return 0;
-    setStudySessionUndo({ label: `同步“${presetTitle}”的历史学习模块（${changed.length}条）`, previous: changed.map(session => ({ ...session })), updatedAt: Date.now() });
+    recordStudySessionUndo({ label: `同步“${presetTitle}”的历史学习模块（${changed.length}条）`, previous: changed.map(session => ({ ...session })), updatedAt: Date.now() });
     const changedIds = new Set(changed.map(session => session.id));
     setSessions(current => current.map(session => changedIds.has(session.id) ? { ...session, module: nextSubject, linkedTaskSubject: nextSubject, linkedPresetId: presetId } : session));
     return changed.length;
@@ -2328,7 +2330,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   </div>;
 }
 
-function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, studySessionUndo, setStudySessionUndo, undoStudySessionChange, flash, timer, moduleOptions, setModuleOptions }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; tasks: Task[]; routines: DailyRoutine[]; taskPresets: StudyTaskPreset[]; studySessionUndo: StudySessionUndo | null; setStudySessionUndo: Dispatch<SetStateAction<StudySessionUndo | null>>; undoStudySessionChange: () => void; flash: (x: string) => void; timer: TimerShared; moduleOptions: string[]; setModuleOptions: Dispatch<SetStateAction<string[]>> }) {
+function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, studySessionUndo, recordStudySessionUndo, undoStudySessionChange, flash, timer, moduleOptions, setModuleOptions }: { sessions: StudySession[]; setSessions: Dispatch<SetStateAction<StudySession[]>>; tasks: Task[]; routines: DailyRoutine[]; taskPresets: StudyTaskPreset[]; studySessionUndo: StudySessionUndo | null; recordStudySessionUndo: (entry: StudySessionUndo) => void; undoStudySessionChange: () => void; flash: (x: string) => void; timer: TimerShared; moduleOptions: string[]; setModuleOptions: Dispatch<SetStateAction<string[]>> }) {
   const [date, setDate] = useStoredState<string>("shore-study-selected-date", localISO()), [module, setModule] = useState(moduleOptions[0] || "资料分析");
   const [recordTitle, setRecordTitle] = useState(""), [recordSource, setRecordSource] = useState(""), [recordNote, setRecordNote] = useState(""), [recordTaskKey, setRecordTaskKey] = useState("");
   const [startTime, setStartTime] = useState("19:00"), [endTime, setEndTime] = useState("20:00"), [editingId, setEditingId] = useState<number | null>(null);
@@ -2518,7 +2520,7 @@ function StudyTime({ sessions, setSessions, tasks, routines, taskPresets, studyS
         : freshLinkSnapshot;
     const row: Omit<StudySession, "id"> = { date: normalizedDate(date), module: module.trim() || "其他计划", title: recordTitle.trim(), source: recordSource.trim() || undefined, note: recordNote.trim() || undefined, ...retainedLinkSnapshot, seconds: finalMinutes * 60, startTime, endTime };
     if (editingId !== null) {
-      if (previousSession) setStudySessionUndo({ label: `修改 ${formatShortDate(previousSession.date)} 学习记录`, previous: [{ ...previousSession }], updatedAt: Date.now() });
+      if (previousSession) recordStudySessionUndo({ label: `修改 ${formatShortDate(previousSession.date)} 学习记录`, previous: [{ ...previousSession }], updatedAt: Date.now() });
       setSessions(current => current.map(session => session.id === editingId ? { ...session, ...row } : session));
       setEditingId(null);
       flash("学习记录已修改；如有误，可在最近学习记录中撤回");
