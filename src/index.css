@@ -3785,3 +3785,62 @@ body:has(.study-time-page) .study-reset-order-button{
     padding-right:6px;
   }
 }
+
+
+/* v70: clarify historical task editing and make the one-step undo action visible */
+.task-preset-form-heading,
+.study-recent-panel-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-width:0;
+}
+.task-preset-form-heading>.panel-title,
+.study-recent-panel-heading>.panel-title{
+  flex:1 1 auto;
+  min-width:0;
+  margin-bottom:0;
+}
+.study-session-undo-button{
+  flex:0 0 auto;
+  min-height:32px;
+  padding:0 11px;
+  border:1px solid color-mix(in srgb,var(--primary) 30%,var(--line));
+  border-radius:10px;
+  background:color-mix(in srgb,var(--primary) 9%,var(--panel));
+  color:var(--primary-deep);
+  font-size:10px;
+  font-weight:750;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.study-session-undo-button:hover{
+  border-color:var(--primary);
+  background:color-mix(in srgb,var(--primary) 15%,var(--panel));
+  box-shadow:0 4px 12px color-mix(in srgb,var(--primary) 10%,transparent);
+}
+.manual-task-safety-note{
+  display:block;
+  margin:4px 0 6px;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.4;
+  font-weight:500;
+}
+.study-recent-panel-heading{
+  margin-bottom:5px;
+}
+.study-recent-panel-heading .study-session-undo-button{
+  align-self:center;
+}
+@media(max-width:760px){
+  .task-preset-form-heading,
+  .study-recent-panel-heading{
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+  .study-session-undo-button{
+    margin-left:auto;
+  }
+}
