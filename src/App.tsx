@@ -1987,7 +1987,7 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setS
 
 function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, taskPresets }: { tasks: Task[]; setTasks: Dispatch<SetStateAction<Task[]>>; routines: DailyRoutine[]; setRoutines: Dispatch<SetStateAction<DailyRoutine[]>>; flash: (x: string) => void; moduleOptions: string[]; taskPresets: StudyTaskPreset[] }) {
   const [month, setMonth] = useStoredState<string>("shore-plan-selected-month", localISO().slice(0, 7));
-  const [date, setDate] = useStoredState<string>("shore-plan-selected-date", localISO());
+  const [date, setDate] = useState<string>(localISO());
   const [title, setTitle] = useState(""), [subject, setSubject] = useState(moduleOptions[0] || "资料分析"), [minutes, setMinutes] = useState(45), [minutesInput, setMinutesInput] = useState("45");
   const [plannedSlots, setPlannedSlots] = useState<TimeSlot[]>([{ start: "08:00", end: "08:45" }]);
   const [selectedPresetId, setSelectedPresetId] = useState(""), [selectedLessons, setSelectedLessons] = useState<number[]>([]), [selectedSubtaskIds, setSelectedSubtaskIds] = useState<string[]>([]);
