@@ -771,14 +771,20 @@ export default function App() {
           const markerFollowSourceId = marker.sourceTask?.followSourcePresetId ?? (markerPresetId !== undefined ? presetMap.get(markerPresetId)?.followPresetId : undefined);
           return markerPresetId === follower.id && markerFollowSourceId === source.id;
         }).map(marker => normalizedDate(marker.date)));
-        const pendingFollow = targetTasks.filter(task => task.followSourcePresetId === source.id && !task.done && !task.followDateOverride && !protectedMigrationTargetIds.has(task.id));
-        const pendingByDate = new Map(pendingFollow.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
+        const replaceablePending = targetTasks.filter(task => {
+          if (task.done || task.followDateOverride || protectedMigrationTargetIds.has(task.id)) return false;
+          if (task.followSourcePresetId === source.id) return true;
+          const taskDate = task.date ? normalizedDate(task.date) : "";
+          return Boolean(task.presetAutoPlan && !task.followSourcePresetId && !task.historyPresetRecord && taskDate >= followFloor);
+        });
+        const replaceablePendingIds = new Set(replaceablePending.map(task => task.id));
+        const pendingByDate = new Map(replaceablePending.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
         const completedLessons = new Set<number>([
           ...normalizedLessonNumbers(follower.completedLessons, follower.totalLessons),
           ...normalizedLessonNumbers(Object.keys(follower.lessonCompletionDates || {}).map(Number), follower.totalLessons),
           ...targetTasks.filter(task => task.done).flatMap(task => taskLessonNumbers(task)),
         ]);
-        const occupiedLessons = new Set<number>(targetTasks.filter(task => task.followSourcePresetId !== source.id || task.done || task.followDateOverride || protectedMigrationTargetIds.has(task.id)).flatMap(task => taskLessonNumbers(task)));
+        const occupiedLessons = new Set<number>(targetTasks.filter(task => !replaceablePendingIds.has(task.id)).flatMap(task => taskLessonNumbers(task)));
         const completedFollowDates = new Set(targetTasks.filter(task => task.followSourcePresetId === source.id && task.done && task.date).map(task => normalizedDate(task.date)));
         const availableLessons = Array.from({ length: Math.max(1, follower.totalLessons) }, (_, index) => index + 1).filter(lesson => !completedLessons.has(lesson) && !occupiedLessons.has(lesson));
         const desired: Task[] = [];
@@ -815,7 +821,7 @@ export default function App() {
             migrationHidden: undefined,
           });
         }
-        next = [...next.filter(task => !(task.presetId === follower.id && task.followSourcePresetId === source.id && !task.done && !task.followDateOverride && !protectedMigrationTargetIds.has(task.id))), ...desired];
+        next = [...next.filter(task => !replaceablePendingIds.has(task.id)), ...desired];
       }
       return JSON.stringify(next) === JSON.stringify(current) ? current : next;
     });
@@ -1752,12 +1758,12 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setS
     if (!preset?.followPresetId) { flash("请先点“修改”打开一个跟随任务"); return; }
     const floor = validISODateInput(followClearDate);
     if (!floor) { flash("请选择有效的清空起始日期"); return; }
-    const removable = tasks.filter(task => task.presetId === preset.id && task.followSourcePresetId === preset.followPresetId && task.presetAutoPlan && !task.done && !task.followDateOverride && task.date && normalizedDate(task.date) >= floor);
+    const removable = tasks.filter(task => task.presetId === preset.id && task.presetAutoPlan && !task.historyPresetRecord && !task.done && !task.followDateOverride && task.date && normalizedDate(task.date) >= floor && (!task.followSourcePresetId || task.followSourcePresetId === preset.followPresetId));
     if (!window.confirm(`确定清空“${preset.title}”从 ${formatShortDate(floor)} 起的未完成自动跟随任务吗？\n起始日前任务、已完成记录和手动改期任务会保留；这一天起也会暂停继续自动生成。`)) return;
     setPresets(current => current.map(item => item.id === preset.id ? { ...item, followClearFromDate: floor } : item));
-    setTasks(current => current.filter(task => !(task.presetId === preset.id && task.followSourcePresetId === preset.followPresetId && task.presetAutoPlan && !task.done && !task.followDateOverride && task.date && normalizedDate(task.date) >= floor)));
+    setTasks(current => current.filter(task => !(task.presetId === preset.id && task.presetAutoPlan && !task.historyPresetRecord && !task.done && !task.followDateOverride && task.date && normalizedDate(task.date) >= floor && (!task.followSourcePresetId || task.followSourcePresetId === preset.followPresetId))));
     setFollowClearDate(floor);
-    flash(`${preset.title} 已清空 ${formatShortDate(floor)} 起的 ${removable.length} 项自动跟随任务；更早任务和已完成记录保留`);
+    flash(`${preset.title} 已清空 ${formatShortDate(floor)} 起的 ${removable.length} 项自动排期（含旧普通排期）；更早任务和已完成记录保留`);
   };
   const resumeFollowerTasks = () => {
     const preset = editingId !== null ? presets.find(item => item.id === editingId) : undefined;
