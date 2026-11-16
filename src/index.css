@@ -3853,3 +3853,31 @@ body:has(.study-time-page) .study-reset-order-button{
     margin-left:auto;
   }
 }
+
+
+/* follower task clear-from-date controls */
+.follow-clear-tools{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(150px,.62fr) auto auto;
+  gap:9px;
+  align-items:end;
+  margin-top:2px;
+  padding:10px;
+  border:1px dashed color-mix(in srgb,#c64848 28%,var(--line));
+  border-radius:11px;
+  background:color-mix(in srgb,#c64848 4%,var(--panel));
+}
+.follow-clear-tools>div{display:grid;gap:3px;align-self:center}
+.follow-clear-tools>div strong{font-size:9px;color:var(--ink)}
+.follow-clear-tools>div small{font-size:8px;line-height:1.45;color:var(--muted)}
+.follow-clear-tools label{margin:0}
+.follow-clear-tools button{min-height:36px;margin:0;padding:0 11px;white-space:nowrap}
+.follow-clear-tools .danger-soft{border-color:color-mix(in srgb,#c64848 38%,var(--line));color:#a43d3d}
+@media(max-width:900px){
+  .follow-clear-tools{grid-template-columns:1fr 1fr}
+  .follow-clear-tools>div{grid-column:1/-1}
+}
+@media(max-width:560px){
+  .follow-clear-tools{grid-template-columns:1fr}
+  .follow-clear-tools>div{grid-column:auto}
+}
