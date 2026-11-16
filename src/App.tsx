@@ -2143,11 +2143,42 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   const chooseTaskPreset = (rawId: string) => { setSelectedPresetId(rawId); setSelectedLessons([]); setSelectedSubtaskIds([]); if (!rawId) { setTitle(""); return; } const preset = orderedTaskPresets.find(item => String(item.id) === rawId); if (!preset) return; if (presetIsComposite(preset)) { const lesson = nextPresetLesson(preset); if (lesson !== null) setSelectedLessons([lesson]); setSelectedSubtaskIds(normalizedSubtasks(preset).map(item => item.id)); } else { const lesson = nextPresetLesson(preset); if (lesson !== null) setSelectedLessons([lesson]); } setSubject(preset.subject); setTitle(""); };
   const togglePresetLesson = (lesson: number) => setSelectedLessons(current => current.includes(lesson) ? current.filter(value => value !== lesson) : [...current, lesson].sort((a, b) => a - b));
   const togglePresetSubtask = (id: string) => setSelectedSubtaskIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+  const resolveTaskPreset = (task: Task | undefined) => {
+    if (!task) return undefined;
+    const direct = task.presetId !== undefined ? taskPresets.find(preset => preset.id === task.presetId) : undefined;
+    if (direct) return direct;
+    const cleanTitle = task.title.trim();
+    const candidates = taskPresets.filter(preset => {
+      const base = preset.title.trim();
+      return cleanTitle === base || cleanTitle.startsWith(`${base} 第`) || cleanTitle.startsWith(`${base} ·`);
+    }).sort((a, b) => b.title.trim().length - a.title.trim().length);
+    if (!candidates.length) return undefined;
+    const sameSubject = candidates.filter(preset => preset.subject === task.subject);
+    const pool = sameSubject.length ? sameSubject : candidates;
+    if (pool.length === 1) return pool[0];
+    return pool[0].title.trim().length > pool[1].title.trim().length ? pool[0] : undefined;
+  };
+  const resolvedTaskLessons = (task: Task, preset: StudyTaskPreset) => {
+    const stored = normalizedLessonNumbers(taskLessonNumbers(task), preset.totalLessons);
+    if (stored.length) return stored;
+    const suffix = task.title.trim().slice(preset.title.trim().length);
+    const match = suffix.match(/第\s*([0-9、,，\s]+)\s*课/);
+    if (!match) return [];
+    const start = presetStartLesson(preset);
+    return normalizedLessonNumbers((match[1].match(/\d+/g) || []).map(value => Number(value) - start + 1), preset.totalLessons);
+  };
+  const resolvedTaskSubtaskIds = (task: Task, preset: StudyTaskPreset) => {
+    const stored = taskSubtaskIds(task, preset);
+    if (stored.length) return stored;
+    const subtasks = normalizedSubtasks(preset);
+    const inferred = subtasks.filter(item => task.title.includes(item.title)).map(item => item.id);
+    return inferred.length ? inferred : subtasks.map(item => item.id);
+  };
   const contextTask = taskContext ? tasks.find(task => task.id === taskContext.taskId) : undefined;
-  const contextPreset = contextTask?.presetId !== undefined ? taskPresets.find(preset => preset.id === contextTask.presetId) : undefined;
-  const contextLessons = contextTask && contextPreset ? normalizedLessonNumbers(taskLessonNumbers(contextTask), contextPreset.totalLessons) : [];
+  const contextPreset = resolveTaskPreset(contextTask);
+  const contextLessons = contextTask && contextPreset ? resolvedTaskLessons(contextTask, contextPreset) : [];
   const contextRemainingLessons = contextLessons.filter(lesson => !contextCompletedLessons.includes(lesson));
-  const contextSubtaskIds = contextTask && contextPreset && presetIsComposite(contextPreset) ? taskSubtaskIds(contextTask, contextPreset) : [];
+  const contextSubtaskIds = contextTask && contextPreset && presetIsComposite(contextPreset) ? resolvedTaskSubtaskIds(contextTask, contextPreset) : [];
   const contextRemainingSubtaskIds = contextSubtaskIds.filter(id => !contextCompletedSubtaskIds.includes(id));
   const markerResolved = (marker: TaskMigrationMarker) => Boolean(tasks.find(task => task.id === marker.targetTaskId)?.done);
   const markerTitle = (task: Task, preset: StudyTaskPreset | undefined, lessons: number[]) => preset && lessons.length ? presetTaskTitle(preset, lessons) : task.title;
@@ -2233,8 +2264,8 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     const y = Math.max(margin, Math.min(preferredY, maxY));
     setTaskContext({ taskId: task.id, x, y });
     setContextCompletedLessons(task.done ? taskLessonNumbers(task) : []);
-    const preset = task.presetId !== undefined ? taskPresets.find(item => item.id === task.presetId) : undefined;
-    setContextCompletedSubtaskIds(task.done && presetIsComposite(preset) ? taskSubtaskIds(task, preset) : []);
+    const preset = resolveTaskPreset(task);
+    setContextCompletedSubtaskIds(task.done && preset && presetIsComposite(preset) ? resolvedTaskSubtaskIds(task, preset) : []);
     setContextMoveDate(shiftISODate(normalizedDate(task.date), 1));
   };
   const closeTaskContext = () => { setTaskContext(null); setContextCompletedLessons([]); setContextCompletedSubtaskIds([]); setContextMoveDate(""); };
@@ -2268,7 +2299,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
       const completed = normalizedSubtaskIds(contextCompletedSubtaskIds, contextPreset).filter(id => contextSubtaskIds.includes(id));
       const remaining = contextSubtaskIds.filter(id => !completed.includes(id));
       if (completed.length === contextSubtaskIds.length) {
-        setTasks(current => current.map(task => task.id === contextTask.id ? { ...task, done: true, date: sourceDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, contextSubtaskIds), subtaskIds: contextSubtaskIds } : task));
+        setTasks(current => current.map(task => task.id === contextTask.id ? { ...task, presetId: contextPreset.id, done: true, date: sourceDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, contextSubtaskIds), lessonNumber: contextLessons.length === 1 ? contextLessons[0] : task.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : task.lessonNumbers, subtaskIds: contextSubtaskIds } : task));
         closeTaskContext(); flash(`已记录 ${formatShortDate(sourceDate)} 完成：${completed.map(id => subtaskTitleMap(contextPreset).get(id)).filter(Boolean).join("、")}`); return;
       }
       if (!targetDate) { flash("请选择剩余子任务的迁移日期"); return; }
@@ -2276,8 +2307,8 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
       const completedMinutes = completed.length && originalMinutes ? Math.max(1, Math.round(originalMinutes * completed.length / totalCount)) : 0;
       const remainingMinutes = originalMinutes ? Math.max(1, originalMinutes - completedMinutes) : 0;
       const { targetId, hiddenId } = makeIds();
-      const targetTask: Task = { ...contextTask, id: targetId, done: false, date: targetDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, remaining), minutes: remainingMinutes || originalMinutes, subtaskIds: remaining, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
-      const hiddenCompletedTask: Task | null = completed.length ? { ...contextTask, id: hiddenId, done: true, date: sourceDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, completed), minutes: completedMinutes, subtaskIds: completed, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, presetAutoPlan: undefined, migrationHidden: true } : null;
+      const targetTask: Task = { ...contextTask, presetId: contextPreset.id, id: targetId, done: false, date: targetDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, remaining), minutes: remainingMinutes || originalMinutes, subtaskIds: remaining, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
+      const hiddenCompletedTask: Task | null = completed.length ? { ...contextTask, presetId: contextPreset.id, id: hiddenId, done: true, date: sourceDate, title: compositeLessonTaskTitle(contextPreset, contextLessons, completed), minutes: completedMinutes, subtaskIds: completed, lessonNumber: contextLessons.length === 1 ? contextLessons[0] : contextTask.lessonNumber, lessonNumbers: contextLessons.length ? contextLessons : contextTask.lessonNumbers, historyPresetRecord: undefined, presetAutoPlan: undefined, migrationHidden: true } : null;
       const trace = makeCompositeMigrationMarker(contextTask, sourceDate, targetDate, targetId, contextTask.title, remaining, completed, totalCount, hiddenCompletedTask?.id);
       setMigrationMarkers(current => [...current.map(marker => marker.targetTaskId === contextTask.id ? { ...marker, targetTaskId: targetId, targetDate } : marker), trace]);
       setTasks(current => cascadeFollowerMigration([...current.filter(task => task.id !== contextTask.id), ...(hiddenCompletedTask ? [hiddenCompletedTask] : []), targetTask], contextTask.presetId, contextTask.title, sourceDate, targetDate));
@@ -2300,7 +2331,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     const remaining = contextLessons.filter(lesson => !completed.includes(lesson));
     if (!completed.length && remaining.length && !targetDate) { flash("请选择剩余课时的迁移日期"); return; }
     if (completed.length === contextLessons.length) {
-      setTasks(current => current.map(task => task.id === contextTask.id ? { ...task, done: true, date: sourceDate, title: presetTaskTitle(contextPreset, completed), lessonNumber: completed.length === 1 ? completed[0] : undefined, lessonNumbers: completed } : task));
+      setTasks(current => current.map(task => task.id === contextTask.id ? { ...task, presetId: contextPreset.id, done: true, date: sourceDate, title: presetTaskTitle(contextPreset, completed), lessonNumber: completed.length === 1 ? completed[0] : undefined, lessonNumbers: completed } : task));
       closeTaskContext(); flash(`已记录 ${formatShortDate(sourceDate)} 完成第${formatPresetLessonSelection(contextPreset, completed)}课`); return;
     }
     if (!targetDate) { flash("请选择剩余课时的迁移日期"); return; }
@@ -2308,8 +2339,8 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     const completedMinutes = completed.length && originalMinutes ? Math.max(1, Math.round(originalMinutes * completed.length / totalCount)) : 0;
     const remainingMinutes = originalMinutes ? Math.max(1, originalMinutes - completedMinutes) : 0;
     const { targetId, hiddenId } = makeIds();
-    const targetTask: Task = { ...contextTask, id: targetId, done: false, date: targetDate, title: presetTaskTitle(contextPreset, remaining), minutes: remainingMinutes || originalMinutes, lessonNumber: remaining.length === 1 ? remaining[0] : undefined, lessonNumbers: remaining, historyPresetRecord: undefined, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
-    const hiddenCompletedTask: Task | null = completed.length ? { ...contextTask, id: hiddenId, done: true, date: sourceDate, title: presetTaskTitle(contextPreset, completed), minutes: completedMinutes, lessonNumber: completed.length === 1 ? completed[0] : undefined, lessonNumbers: completed, historyPresetRecord: undefined, presetAutoPlan: undefined, migrationHidden: true } : null;
+    const targetTask: Task = { ...contextTask, presetId: contextPreset.id, id: targetId, done: false, date: targetDate, title: presetTaskTitle(contextPreset, remaining), minutes: remainingMinutes || originalMinutes, lessonNumber: remaining.length === 1 ? remaining[0] : undefined, lessonNumbers: remaining, historyPresetRecord: undefined, followDateOverride: contextTask.followSourcePresetId ? true : contextTask.followDateOverride, migrationHidden: undefined };
+    const hiddenCompletedTask: Task | null = completed.length ? { ...contextTask, presetId: contextPreset.id, id: hiddenId, done: true, date: sourceDate, title: presetTaskTitle(contextPreset, completed), minutes: completedMinutes, lessonNumber: completed.length === 1 ? completed[0] : undefined, lessonNumbers: completed, historyPresetRecord: undefined, presetAutoPlan: undefined, migrationHidden: true } : null;
     const trace = makeMigrationMarker(contextTask, sourceDate, targetDate, targetId, contextTask.title, remaining, completed, totalCount, hiddenCompletedTask?.id);
     setMigrationMarkers(current => [...current.map(marker => marker.targetTaskId === contextTask.id ? { ...marker, targetTaskId: targetId, targetDate } : marker), trace]);
     setTasks(current => cascadeFollowerMigration([...current.filter(task => task.id !== contextTask.id), ...(hiddenCompletedTask ? [hiddenCompletedTask] : []), targetTask], contextTask.presetId, contextTask.title, sourceDate, targetDate));
