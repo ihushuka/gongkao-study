@@ -704,7 +704,13 @@ export default function App() {
         if (Array.isArray(parsedMarkers)) persistedMigrationMarkers = parsedMarkers as TaskMigrationMarker[];
       } catch { /* keep sync resilient if old storage is malformed */ }
       const protectedMigrationTargetIds = new Set(persistedMigrationMarkers.map(marker => Number(marker.targetTaskId)).filter(Number.isFinite));
-      const partiallyMigratedCompositeTargetIds = new Set(persistedMigrationMarkers.filter(marker => (marker.completedSubtaskIds?.length || 0) > 0).map(marker => Number(marker.targetTaskId)).filter(Number.isFinite));
+      const completedSubtaskIdsByTarget = new Map<number, Set<string>>();
+      for (const marker of persistedMigrationMarkers) {
+        if (!marker.completedSubtaskIds?.length) continue;
+        const completed = completedSubtaskIdsByTarget.get(marker.targetTaskId) || new Set<string>();
+        marker.completedSubtaskIds.forEach(id => completed.add(id));
+        completedSubtaskIdsByTarget.set(marker.targetTaskId, completed);
+      }
       const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
       let next = current.map(task => protectedMigrationTargetIds.has(task.id) && task.followSourcePresetId && !task.followDateOverride ? { ...task, followDateOverride: true } : task).filter(task => {
         if (protectedMigrationTargetIds.has(task.id)) return true;
@@ -749,17 +755,19 @@ export default function App() {
         });
       }
       next = next.map(task => {
-        if (task.done || task.historyPresetRecord || task.migrationHidden || partiallyMigratedCompositeTargetIds.has(task.id) || (!task.presetAutoPlan && !task.followSourcePresetId)) return task;
+        if (task.historyPresetRecord || task.migrationHidden || (!task.presetAutoPlan && !task.followSourcePresetId)) return task;
         const preset = task.presetId !== undefined ? presetMap.get(task.presetId) : undefined;
         if (!preset || !presetIsComposite(preset)) return task;
         const allSubtaskIds = normalizedSubtasks(preset).map(item => item.id);
-        if (!allSubtaskIds.length) return task;
+        const completedSubtaskIds = completedSubtaskIdsByTarget.get(task.id) || new Set<string>();
+        const expectedSubtaskIds = allSubtaskIds.filter(id => !completedSubtaskIds.has(id));
+        if (!expectedSubtaskIds.length) return task;
         const lessons = normalizedLessonNumbers(taskLessonNumbers(task), preset.totalLessons);
-        const title = compositeLessonTaskTitle(preset, lessons, allSubtaskIds);
+        const title = compositeLessonTaskTitle(preset, lessons, expectedSubtaskIds);
         const storedSubtaskIds = normalizedSubtaskIds(task.subtaskIds, preset);
-        const subtaskIdsMatch = storedSubtaskIds.length === allSubtaskIds.length && storedSubtaskIds.every((id, index) => id === allSubtaskIds[index]);
+        const subtaskIdsMatch = storedSubtaskIds.length === expectedSubtaskIds.length && storedSubtaskIds.every((id, index) => id === expectedSubtaskIds[index]);
         if (task.title === title && task.subject === preset.subject && subtaskIdsMatch) return task;
-        return { ...task, title, subject: preset.subject, subtaskIds: allSubtaskIds };
+        return { ...task, title, subject: preset.subject, subtaskIds: expectedSubtaskIds };
       });
       let seed = Date.now();
       for (const follower of taskPresets) {
@@ -2183,13 +2191,48 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   };
   const resolvedTaskSubtaskIds = (task: Task, preset: StudyTaskPreset) => {
     const subtasks = normalizedSubtasks(preset);
-    const partialMigration = migrationMarkers.find(marker => marker.targetTaskId === task.id && (marker.completedSubtaskIds?.length || 0) > 0);
-    if (!task.done && !task.historyPresetRecord && !task.migrationHidden && !partialMigration && (task.presetAutoPlan || task.followSourcePresetId)) return subtasks.map(item => item.id);
+    const completedByMigration = new Set(migrationMarkers.filter(marker => marker.targetTaskId === task.id).flatMap(marker => normalizedSubtaskIds(marker.completedSubtaskIds, preset)));
+    if (!task.historyPresetRecord && !task.migrationHidden && (task.presetAutoPlan || task.followSourcePresetId)) return subtasks.map(item => item.id).filter(id => !completedByMigration.has(id));
     const stored = taskSubtaskIds(task, preset);
     if (stored.length) return stored;
     const inferred = subtasks.filter(item => task.title.includes(item.title)).map(item => item.id);
     return inferred.length ? inferred : subtasks.map(item => item.id);
   };
+  useEffect(() => {
+    if (!taskPresets.length) return;
+    setMigrationMarkers(current => {
+      let changed = false;
+      const repairedById = new Map<number, TaskMigrationMarker>();
+      const completedBeforeByTarget = new Map<number, Set<string>>();
+      const ordered = [...current].sort((a, b) => a.targetTaskId - b.targetTaskId || normalizedDate(a.date).localeCompare(normalizedDate(b.date)) || a.id - b.id);
+      for (const marker of ordered) {
+        const target = tasks.find(task => task.id === marker.targetTaskId);
+        const source = marker.sourceTask || target;
+        const presetId = marker.presetId ?? source?.presetId ?? target?.presetId;
+        const preset = presetId !== undefined ? taskPresets.find(item => item.id === presetId) : undefined;
+        const trackedFollower = Boolean(source?.presetAutoPlan || source?.followSourcePresetId || target?.presetAutoPlan || target?.followSourcePresetId);
+        if (!trackedFollower || !preset || !presetIsComposite(preset)) {
+          repairedById.set(marker.id, marker);
+          continue;
+        }
+        const completedBefore = completedBeforeByTarget.get(marker.targetTaskId) || new Set<string>();
+        const allSubtaskIds = normalizedSubtasks(preset).map(item => item.id);
+        const sourceSubtaskIds = allSubtaskIds.filter(id => !completedBefore.has(id));
+        const completedHere = normalizedSubtaskIds(marker.completedSubtaskIds, preset).filter(id => sourceSubtaskIds.includes(id));
+        const completedHereSet = new Set(completedHere);
+        const remainingSubtaskIds = sourceSubtaskIds.filter(id => !completedHereSet.has(id));
+        const lessons = normalizedLessonNumbers(marker.lessonNumbers?.length ? marker.lessonNumbers : source ? taskLessonNumbers(source) : [], preset.totalLessons);
+        const title = compositeLessonTaskTitle(preset, lessons, sourceSubtaskIds);
+        const sourceTask = marker.sourceTask ? { ...marker.sourceTask, title, subject: preset.subject, presetId: preset.id, lessonNumber: lessons.length === 1 ? lessons[0] : marker.sourceTask.lessonNumber, lessonNumbers: lessons.length ? lessons : marker.sourceTask.lessonNumbers, subtaskIds: sourceSubtaskIds } : marker.sourceTask;
+        const repaired: TaskMigrationMarker = { ...marker, title, subject: preset.subject, presetId: preset.id, lessonNumbers: lessons.length ? lessons : marker.lessonNumbers, subtaskIds: remainingSubtaskIds.length ? remainingSubtaskIds : undefined, completedSubtaskIds: completedHere.length ? completedHere : undefined, originalSubtaskCount: sourceSubtaskIds.length, sourceTask };
+        if (JSON.stringify(repaired) !== JSON.stringify(marker)) changed = true;
+        repairedById.set(marker.id, repaired);
+        completedHere.forEach(id => completedBefore.add(id));
+        completedBeforeByTarget.set(marker.targetTaskId, completedBefore);
+      }
+      return changed ? current.map(marker => repairedById.get(marker.id) || marker) : current;
+    });
+  }, [taskPresets, tasks, setMigrationMarkers]);
   const contextTask = taskContext ? tasks.find(task => task.id === taskContext.taskId) : undefined;
   const contextPreset = resolveTaskPreset(contextTask);
   const contextLessons = contextTask && contextPreset ? resolvedTaskLessons(contextTask, contextPreset) : [];
