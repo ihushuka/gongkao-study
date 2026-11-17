@@ -704,6 +704,7 @@ export default function App() {
         if (Array.isArray(parsedMarkers)) persistedMigrationMarkers = parsedMarkers as TaskMigrationMarker[];
       } catch { /* keep sync resilient if old storage is malformed */ }
       const protectedMigrationTargetIds = new Set(persistedMigrationMarkers.map(marker => Number(marker.targetTaskId)).filter(Number.isFinite));
+      const partiallyMigratedCompositeTargetIds = new Set(persistedMigrationMarkers.filter(marker => (marker.completedSubtaskIds?.length || 0) > 0).map(marker => Number(marker.targetTaskId)).filter(Number.isFinite));
       const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
       let next = current.map(task => protectedMigrationTargetIds.has(task.id) && task.followSourcePresetId && !task.followDateOverride ? { ...task, followDateOverride: true } : task).filter(task => {
         if (protectedMigrationTargetIds.has(task.id)) return true;
@@ -747,6 +748,19 @@ export default function App() {
           migrationHidden: undefined,
         });
       }
+      next = next.map(task => {
+        if (task.done || task.historyPresetRecord || task.migrationHidden || partiallyMigratedCompositeTargetIds.has(task.id) || (!task.presetAutoPlan && !task.followSourcePresetId)) return task;
+        const preset = task.presetId !== undefined ? presetMap.get(task.presetId) : undefined;
+        if (!preset || !presetIsComposite(preset)) return task;
+        const allSubtaskIds = normalizedSubtasks(preset).map(item => item.id);
+        if (!allSubtaskIds.length) return task;
+        const lessons = normalizedLessonNumbers(taskLessonNumbers(task), preset.totalLessons);
+        const title = compositeLessonTaskTitle(preset, lessons, allSubtaskIds);
+        const storedSubtaskIds = normalizedSubtaskIds(task.subtaskIds, preset);
+        const subtaskIdsMatch = storedSubtaskIds.length === allSubtaskIds.length && storedSubtaskIds.every((id, index) => id === allSubtaskIds[index]);
+        if (task.title === title && task.subject === preset.subject && subtaskIdsMatch) return task;
+        return { ...task, title, subject: preset.subject, subtaskIds: allSubtaskIds };
+      });
       let seed = Date.now();
       for (const follower of taskPresets) {
         if (!follower.followPresetId || follower.followPresetId === follower.id) continue;
@@ -2168,9 +2182,11 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     return normalizedLessonNumbers((match[1].match(/\d+/g) || []).map(value => Number(value) - start + 1), preset.totalLessons);
   };
   const resolvedTaskSubtaskIds = (task: Task, preset: StudyTaskPreset) => {
+    const subtasks = normalizedSubtasks(preset);
+    const partialMigration = migrationMarkers.find(marker => marker.targetTaskId === task.id && (marker.completedSubtaskIds?.length || 0) > 0);
+    if (!task.done && !task.historyPresetRecord && !task.migrationHidden && !partialMigration && (task.presetAutoPlan || task.followSourcePresetId)) return subtasks.map(item => item.id);
     const stored = taskSubtaskIds(task, preset);
     if (stored.length) return stored;
-    const subtasks = normalizedSubtasks(preset);
     const inferred = subtasks.filter(item => task.title.includes(item.title)).map(item => item.id);
     return inferred.length ? inferred : subtasks.map(item => item.id);
   };
