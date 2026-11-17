@@ -712,6 +712,29 @@ export default function App() {
         completedSubtaskIdsByTarget.set(marker.targetTaskId, completed);
       }
       const presetMap = new Map(taskPresets.map(preset => [preset.id, preset] as const));
+      const resolvePresetForTask = (task: Task) => {
+        const direct = task.presetId !== undefined ? presetMap.get(task.presetId) : undefined;
+        if (direct) return direct;
+        const cleanTitle = task.title.trim();
+        const candidates = taskPresets.filter(preset => {
+          const base = preset.title.trim();
+          return cleanTitle === base || cleanTitle.startsWith(`${base} 第`) || cleanTitle.startsWith(`${base} ·`);
+        }).sort((a, b) => b.title.trim().length - a.title.trim().length);
+        if (!candidates.length) return undefined;
+        const sameSubject = candidates.filter(preset => preset.subject === task.subject);
+        const pool = sameSubject.length ? sameSubject : candidates;
+        if (pool.length === 1) return pool[0];
+        return pool[0].title.trim().length > pool[1].title.trim().length ? pool[0] : undefined;
+      };
+      const resolveLessonsForTask = (task: Task, preset: StudyTaskPreset) => {
+        const stored = normalizedLessonNumbers(taskLessonNumbers(task), preset.totalLessons);
+        if (stored.length) return stored;
+        const suffix = task.title.trim().slice(preset.title.trim().length);
+        const match = suffix.match(/第\s*([0-9、,，\s]+)\s*课/);
+        if (!match) return [];
+        const start = presetStartLesson(preset);
+        return normalizedLessonNumbers((match[1].match(/\d+/g) || []).map(value => Number(value) - start + 1), preset.totalLessons);
+      };
       let next = current.map(task => protectedMigrationTargetIds.has(task.id) && task.followSourcePresetId && !task.followDateOverride ? { ...task, followDateOverride: true } : task).filter(task => {
         if (protectedMigrationTargetIds.has(task.id)) return true;
         if (!task.followSourcePresetId || task.done) return true;
@@ -756,18 +779,18 @@ export default function App() {
       }
       next = next.map(task => {
         if (task.historyPresetRecord || task.migrationHidden || task.manualSubtaskSelection) return task;
-        const preset = task.presetId !== undefined ? presetMap.get(task.presetId) : undefined;
+        const preset = resolvePresetForTask(task);
         if (!preset || !presetIsComposite(preset)) return task;
         const allSubtaskIds = normalizedSubtasks(preset).map(item => item.id);
         const completedSubtaskIds = completedSubtaskIdsByTarget.get(task.id) || new Set<string>();
         const expectedSubtaskIds = allSubtaskIds.filter(id => !completedSubtaskIds.has(id));
         if (!expectedSubtaskIds.length) return task;
-        const lessons = normalizedLessonNumbers(taskLessonNumbers(task), preset.totalLessons);
+        const lessons = resolveLessonsForTask(task, preset);
         const title = compositeLessonTaskTitle(preset, lessons, expectedSubtaskIds);
         const storedSubtaskIds = normalizedSubtaskIds(task.subtaskIds, preset);
         const subtaskIdsMatch = storedSubtaskIds.length === expectedSubtaskIds.length && storedSubtaskIds.every((id, index) => id === expectedSubtaskIds[index]);
-        if (task.title === title && task.subject === preset.subject && subtaskIdsMatch) return task;
-        return { ...task, title, subject: preset.subject, subtaskIds: expectedSubtaskIds };
+        if (task.presetId === preset.id && task.title === title && task.subject === preset.subject && subtaskIdsMatch) return task;
+        return { ...task, presetId: preset.id, title, subject: preset.subject, lessonNumber: lessons.length === 1 ? lessons[0] : task.lessonNumber, lessonNumbers: lessons.length ? lessons : task.lessonNumbers, subtaskIds: expectedSubtaskIds };
       });
       let seed = Date.now();
       for (const follower of taskPresets) {
