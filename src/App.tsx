@@ -786,7 +786,9 @@ export default function App() {
         const expectedSubtaskIds = allSubtaskIds.filter(id => !completedSubtaskIds.has(id));
         if (!expectedSubtaskIds.length) return task;
         const lessons = resolveLessonsForTask(task, preset);
-        const title = compositeLessonTaskTitle(preset, lessons, expectedSubtaskIds);
+        const legacyTitleBase = task.title.split(" · ")[0].trim() || preset.title;
+        const expectedNames = expectedSubtaskIds.map(id => subtaskTitleMap(preset).get(id)).filter(Boolean);
+        const title = lessons.length ? compositeLessonTaskTitle(preset, lessons, expectedSubtaskIds) : expectedNames.length ? `${legacyTitleBase} · ${expectedNames.join(" + ")}` : legacyTitleBase;
         const storedSubtaskIds = normalizedSubtaskIds(task.subtaskIds, preset);
         const subtaskIdsMatch = storedSubtaskIds.length === expectedSubtaskIds.length && storedSubtaskIds.every((id, index) => id === expectedSubtaskIds[index]);
         if (task.presetId === preset.id && task.title === title && task.subject === preset.subject && subtaskIdsMatch) return task;
