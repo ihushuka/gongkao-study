@@ -822,7 +822,7 @@ export default function App() {
           if (task.done || task.followDateOverride || protectedMigrationTargetIds.has(task.id)) return false;
           if (task.followSourcePresetId === source.id) return true;
           const taskDate = task.date ? normalizedDate(task.date) : "";
-          return Boolean(!task.followSourcePresetId && !task.historyPresetRecord && !task.migrationHidden && taskDate >= followFloor);
+          return Boolean(task.presetAutoPlan && !task.followSourcePresetId && !task.historyPresetRecord && !task.migrationHidden && taskDate >= followFloor);
         });
         const replaceablePendingIds = new Set(replaceablePending.map(task => task.id));
         const pendingByDate = new Map(replaceablePending.filter(task => task.date).map(task => [normalizedDate(task.date), task] as const));
