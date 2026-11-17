@@ -6,7 +6,7 @@ type SupervisionState = { delayCount?: number; postponedUntil?: string; reasons?
 type TimeSlot = { start: string; end: string };
 type StudyTaskKind = "course" | "composite";
 type StudySubtask = { id: string; title: string; minutes?: number; order?: number };
-type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; subtaskIds?: string[]; compositeRunId?: string; historyPresetRecord?: boolean; presetAutoPlan?: boolean; followSourcePresetId?: number; followDateOverride?: boolean; migrationHidden?: boolean };
+type Task = { id: number; title: string; subject: string; minutes: number; done: boolean; date?: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; supervision?: SupervisionState; presetId?: number; lessonNumber?: number; lessonNumbers?: number[]; subtaskIds?: string[]; compositeRunId?: string; manualSubtaskSelection?: boolean; historyPresetRecord?: boolean; presetAutoPlan?: boolean; followSourcePresetId?: number; followDateOverride?: boolean; migrationHidden?: boolean };
 type TaskMigrationMarker = { id: number; targetTaskId: number; title: string; subject: string; date: string; targetDate: string; presetId?: number; lessonNumbers?: number[]; completedLessonNumbers?: number[]; originalLessonCount?: number; subtaskIds?: string[]; completedSubtaskIds?: string[]; originalSubtaskCount?: number; sourceTask?: Task; hiddenCompletedTaskId?: number };
 type StudyTaskPreset = { id: number; title: string; subject: string; totalLessons: number; startLesson?: number; order?: number; completedLessons?: number[]; lessonCompletionDates?: Record<string, string>; taskType?: StudyTaskKind; subtasks?: StudySubtask[]; completedSubtasks?: string[]; subtaskCompletionDates?: Record<string, string>; followPresetId?: number; followStartDate?: string; followClearFromDate?: string };
 type DailyRoutine = { id: number; title: string; subject: string; minutes: number; month: string; plannedStart?: string; plannedEnd?: string; plannedSlots?: TimeSlot[]; completedDates: string[]; skippedDates?: string[]; supervision?: Record<string, SupervisionState> };
@@ -755,7 +755,7 @@ export default function App() {
         });
       }
       next = next.map(task => {
-        if (task.historyPresetRecord || task.migrationHidden || (!task.presetAutoPlan && !task.followSourcePresetId)) return task;
+        if (task.historyPresetRecord || task.migrationHidden || task.manualSubtaskSelection) return task;
         const preset = task.presetId !== undefined ? presetMap.get(task.presetId) : undefined;
         if (!preset || !presetIsComposite(preset)) return task;
         const allSubtaskIds = normalizedSubtasks(preset).map(item => item.id);
@@ -837,6 +837,7 @@ export default function App() {
             lessonNumber: lessons.length === 1 ? lessons[0] : undefined,
             lessonNumbers: lessons,
             ...(subtaskIds ? { subtaskIds, compositeRunId: `${follower.id}-follow-${date}` } : {}),
+            manualSubtaskSelection: undefined,
             historyPresetRecord: undefined,
             presetAutoPlan: true,
             followSourcePresetId: source.id,
@@ -2192,7 +2193,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
   const resolvedTaskSubtaskIds = (task: Task, preset: StudyTaskPreset) => {
     const subtasks = normalizedSubtasks(preset);
     const completedByMigration = new Set(migrationMarkers.filter(marker => marker.targetTaskId === task.id).flatMap(marker => normalizedSubtaskIds(marker.completedSubtaskIds, preset)));
-    if (!task.historyPresetRecord && !task.migrationHidden && (task.presetAutoPlan || task.followSourcePresetId)) return subtasks.map(item => item.id).filter(id => !completedByMigration.has(id));
+    if (!task.historyPresetRecord && !task.migrationHidden && !task.manualSubtaskSelection) return subtasks.map(item => item.id).filter(id => !completedByMigration.has(id));
     const stored = taskSubtaskIds(task, preset);
     if (stored.length) return stored;
     const inferred = subtasks.filter(item => task.title.includes(item.title)).map(item => item.id);
@@ -2210,8 +2211,8 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
         const source = marker.sourceTask || target;
         const presetId = marker.presetId ?? source?.presetId ?? target?.presetId;
         const preset = presetId !== undefined ? taskPresets.find(item => item.id === presetId) : undefined;
-        const trackedFollower = Boolean(source?.presetAutoPlan || source?.followSourcePresetId || target?.presetAutoPlan || target?.followSourcePresetId);
-        if (!trackedFollower || !preset || !presetIsComposite(preset)) {
+        const fixedCompositeTask = !source?.manualSubtaskSelection && !target?.manualSubtaskSelection;
+        if (!fixedCompositeTask || !preset || !presetIsComposite(preset)) {
           repairedById.set(marker.id, marker);
           continue;
         }
@@ -2504,7 +2505,7 @@ function Plan({ tasks, setTasks, routines, setRoutines, flash, moduleOptions, ta
     }) : tasks.some(task => normalizedDate(task.date) === date && task.title.trim() === finalTitle);
     if (duplicate && !window.confirm(composite ? "同一天已经安排过其中的相同子任务，仍要重复添加吗？" : "同一天已经安排过其中的相同课时/任务，仍要重复添加吗？")) return;
     const newTaskId = Date.now();
-    const newTask: Task = { id: newTaskId, title: finalTitle, subject, minutes: totalMinutes, date, done: false, plannedStart: slots[0].start, plannedEnd: slots[slots.length - 1].end, plannedSlots: slots, presetId: selectedPreset?.id, lessonNumber: selectedPreset && lessons.length === 1 ? lessons[0] : undefined, lessonNumbers: selectedPreset ? lessons : undefined, subtaskIds: selectedPreset && composite ? subtaskIds : undefined, compositeRunId: selectedPreset && composite ? `${selectedPreset.id}-manual-${newTaskId}` : undefined };
+    const newTask: Task = { id: newTaskId, title: finalTitle, subject, minutes: totalMinutes, date, done: false, plannedStart: slots[0].start, plannedEnd: slots[slots.length - 1].end, plannedSlots: slots, presetId: selectedPreset?.id, lessonNumber: selectedPreset && lessons.length === 1 ? lessons[0] : undefined, lessonNumbers: selectedPreset ? lessons : undefined, subtaskIds: selectedPreset && composite ? subtaskIds : undefined, compositeRunId: selectedPreset && composite ? `${selectedPreset.id}-manual-${newTaskId}` : undefined, manualSubtaskSelection: selectedPreset && composite && subtaskIds.length < normalizedSubtasks(selectedPreset).length ? true : undefined };
     setTasks([...tasks, newTask]);
     setTitle(""); setSelectedPresetId(""); setSelectedLessons([]); setSelectedSubtaskIds([]); setMinutes(totalMinutes); setMinutesInput(String(totalMinutes)); setMonth(date.slice(0, 7));
     setTaskComposerOpen(false);
