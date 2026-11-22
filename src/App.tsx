@@ -848,14 +848,13 @@ export default function App() {
           ...normalizedLessonNumbers(Object.keys(follower.lessonCompletionDates || {}).map(Number), follower.totalLessons),
           ...targetTasks.filter(task => task.done).flatMap(task => resolveLessonsForTask(task, follower)),
         ]);
-        const manuallyMovedLessons = new Set<number>(targetTasks.filter(task => task.followDateOverride || protectedMigrationTargetIds.has(task.id)).flatMap(task => resolveLessonsForTask(task, follower)));
-        const availableLessons = Array.from({ length: Math.max(1, source.totalLessons) }, (_, index) => index + 1).filter(lesson => !completedLessons.has(lesson) && !manuallyMovedLessons.has(lesson));
+        const availableLessons = Array.from({ length: Math.max(1, source.totalLessons) }, (_, index) => index + 1).filter(lesson => !completedLessons.has(lesson));
         const desired: Task[] = [];
         let fallbackOffset = 0;
         for (const entry of sourceEntries) {
           const date = entry.date;
           if (migratedSourceDates.has(date)) continue;
-          let lessons = entry.lessons.filter(lesson => lesson >= 1 && lesson <= source.totalLessons && !completedLessons.has(lesson) && !manuallyMovedLessons.has(lesson));
+          let lessons = entry.lessons.filter(lesson => lesson >= 1 && lesson <= source.totalLessons && !completedLessons.has(lesson));
           if (!entry.lessons.length) {
             const fallbackLesson = availableLessons[fallbackOffset++];
             lessons = fallbackLesson ? [fallbackLesson] : [];
