@@ -1679,13 +1679,13 @@ function StudyTaskManager({ presets, setPresets, tasks, setTasks, sessions, setS
   const followSourcePreset = followPresetId ? ordered.find(item => item.id === followPresetId) || null : null;
   const taskSubjectOptions = Array.from(new Set([...moduleOptions, ...presets.map(item => item.subject), ...tasks.map(item => item.subject), subject].filter(Boolean)));
   const planningPreset = ordered.find(item => item.id === planningPresetId) || null;
-  const [detailPresetId, setDetailPresetState] = useState<number | null>(null);
+  const [detailPresetId, setDetailPresetId] = useState<number | null>(null);
   const detailPreset = ordered.find(item => item.id === detailPresetId) || null;
-  const setDetailPresetId = (next: SetStateAction<number | null>) => {
-    const resolved = typeof next === "function" ? (next as (value: number | null) => number | null)(detailPresetId) : next;
-    setDetailPresetState(resolved);
-    if (resolved !== null) window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById("task-progress-detail")?.scrollIntoView({ behavior: "smooth", block: "start" })));
-  };
+  useEffect(() => {
+    if (detailPresetId === null) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("task-progress-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [detailPresetId]);
   const resetEditor = () => { setEditingId(null); setTitle(""); setTaskType("course"); setSubtasks([]); setSubtaskTitle(""); setSubtaskMinutes("30"); setTotalLessons(12); setStartLesson(1); setStartLessonInput("1"); setHistorySelection([]); setHistoryDates({}); setLegacyUndated([]); setHistoryDate(localISO()); setFollowPresetId(null); setFollowStartDate(localISO()); setFollowClearDate(localISO()); };
   const addCompositeSubtask = () => {
     const clean = subtaskTitle.trim();
